@@ -1,0 +1,1603 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>待機表管理システム — 血液内科</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap');
+:root {
+  --bg:#080c14; --s1:#0d1220; --s2:#131828; --s3:#1a2035;
+  --border:#1e2a42; --border2:#2a3a58;
+  --accent:#3b82f6; --accent2:#6366f1; --accent3:#0ea5e9;
+  --green:#10b981; --yellow:#f59e0b; --red:#ef4444; --purple:#a855f7;
+  --text:#e2e8f0; --text2:#94a3b8; --text3:#4a5568;
+  --c0:#3b82f6; --c1:#f59e0b; --c2:#10b981; --c3:#f43f5e;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text);font-size:13px;overflow:hidden;}
+
+/* ── Layout ── */
+.app{display:grid;grid-template-rows:52px 1fr;height:100vh;}
+.topbar{background:var(--s1);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:16px;z-index:100;}
+.logo{display:flex;align-items:center;gap:10px;}
+.logo-mark{width:32px;height:32px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;}
+.logo-text{font-size:14px;font-weight:700;letter-spacing:.06em;}
+.logo-sub{font-size:10px;color:var(--text2);margin-top:1px;}
+.topbar-steps{display:flex;align-items:center;gap:4px;margin-left:auto;}
+.step-pill{display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:500;border:1px solid var(--border);color:var(--text3);transition:all .2s;}
+.step-pill.active{background:var(--s3);border-color:var(--accent);color:var(--accent);}
+.step-pill.done{border-color:var(--green);color:var(--green);background:rgba(16,185,129,.08);}
+.step-num{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;background:var(--border);color:var(--text2);}
+.step-pill.active .step-num{background:var(--accent);color:#fff;}
+.step-pill.done .step-num{background:var(--green);color:#fff;}
+
+.body{display:grid;grid-template-columns:56px 1fr;overflow:hidden;}
+.nav{background:var(--s1);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:4px;}
+.nav-btn{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;border:1px solid transparent;color:var(--text2);transition:all .15s;position:relative;}
+.nav-btn:hover{background:var(--s3);color:var(--text);}
+.nav-btn.active{background:rgba(59,130,246,.15);border-color:rgba(59,130,246,.3);color:var(--accent);}
+.nav-btn .badge{position:absolute;top:4px;right:4px;width:8px;height:8px;border-radius:50%;background:var(--red);}
+
+.content{overflow:hidden;display:flex;flex-direction:column;}
+.panel{display:none;flex:1;overflow-y:auto;padding:20px;}
+.panel.active{display:flex;flex-direction:column;gap:16px;}
+
+/* ── Cards ── */
+.card{background:var(--s2);border:1px solid var(--border);border-radius:12px;padding:16px;}
+.card-title{font-size:11px;font-weight:700;color:var(--text2);letter-spacing:.1em;text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+.card-title span{flex:1;}
+
+/* ── Buttons ── */
+.btn{padding:7px 14px;border:none;border-radius:7px;font-family:inherit;font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px;}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;}
+.btn-primary:hover{opacity:.85;transform:translateY(-1px);}
+.btn-ghost{background:var(--s3);color:var(--text);border:1px solid var(--border);}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent);}
+.btn-green{background:rgba(16,185,129,.15);color:var(--green);border:1px solid rgba(16,185,129,.3);}
+.btn-red{background:rgba(239,68,68,.12);color:var(--red);border:1px solid rgba(239,68,68,.25);}
+.btn-yellow{background:rgba(245,158,11,.12);color:var(--yellow);border:1px solid rgba(245,158,11,.25);}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none;}
+
+/* ── Upload zone ── */
+.upload-zone{border:2px dashed var(--border2);border-radius:12px;padding:32px;text-align:center;cursor:pointer;transition:all .2s;position:relative;}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--accent);background:rgba(59,130,246,.05);}
+.upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;}
+.upload-icon{font-size:36px;margin-bottom:10px;}
+.upload-title{font-size:14px;font-weight:600;margin-bottom:4px;}
+.upload-sub{font-size:11px;color:var(--text2);}
+
+/* ── AI parse result ── */
+.parse-result{background:var(--s3);border:1px solid var(--border2);border-radius:10px;padding:14px;margin-top:12px;}
+.parse-row{display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border);}
+.parse-row:last-child{border-bottom:none;}
+.parse-date{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--text2);width:80px;}
+.parse-doc{font-weight:600;}
+.parse-type{font-size:11px;color:var(--text2);margin-left:auto;}
+.parse-check{color:var(--green);margin-left:8px;}
+
+/* ── Doctor config ── */
+.doc-cards{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.doc-card{background:var(--s3);border:1px solid var(--border);border-radius:10px;padding:12px;}
+.doc-header{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+.doc-dot{width:10px;height:10px;border-radius:50%;}
+.doc-name-input{background:var(--s2);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:6px;font-family:inherit;font-size:13px;font-weight:600;width:80px;}
+.doc-email-input{background:var(--s2);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:6px;font-family:inherit;font-size:11px;width:100%;margin-top:4px;}
+.doc-email-input:focus,.doc-name-input:focus{outline:none;border-color:var(--accent);}
+.clinic-row{display:flex;gap:4px;margin-top:8px;flex-wrap:wrap;}
+.clinic-btn{padding:3px 7px;border-radius:5px;font-size:10px;cursor:pointer;border:1px solid var(--border);color:var(--text2);transition:all .1s;}
+.clinic-btn.on{background:rgba(245,158,11,.15);border-color:var(--yellow);color:var(--yellow);}
+
+/* ── Token links ── */
+.token-row{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--s3);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;}
+.token-doc{font-weight:600;width:50px;}
+.token-url{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.token-status{font-size:10px;padding:2px 7px;border-radius:10px;}
+.token-status.waiting{background:rgba(245,158,11,.15);color:var(--yellow);}
+.token-status.done{background:rgba(16,185,129,.15);color:var(--green);}
+.token-status.sent{background:rgba(59,130,246,.15);color:var(--accent);}
+
+/* ── Calendar ── */
+.cal-wrap{overflow-x:auto;}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;min-width:700px;}
+.cal-hdr{text-align:center;font-size:10px;font-weight:700;color:var(--text2);padding:5px;letter-spacing:.05em;}
+.cal-hdr.sat{color:#60a5fa;}.cal-hdr.sun{color:#f87171;}
+.cal-cell{background:var(--s3);border:1px solid var(--border);border-radius:8px;padding:5px;min-height:76px;transition:border-color .15s;cursor:default;}
+.cal-cell:hover{border-color:var(--border2);}
+.cal-cell.empty{background:transparent;border-color:transparent;}
+.cal-cell.weekend{background:#12102a;border-color:#2d2060;}
+.cal-cell.holiday{background:#12102a;border-color:#2d2060;}
+.c-date{font-size:10px;font-weight:700;color:var(--text2);margin-bottom:3px;}
+.cal-cell.weekend .c-date,.cal-cell.holiday .c-date{color:#818cf8;}
+.duty-chip{background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.25);border-radius:4px;font-size:9px;color:var(--green);padding:1px 4px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.oncall-sel{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:2px 4px;border-radius:5px;font-family:inherit;font-size:11px;margin-top:2px;}
+.oncall-sel:focus{outline:none;border-color:var(--accent);}
+.oncall-sel.assigned{border-color:var(--accent2);}
+.oncall-sel.locked{border-color:var(--green);pointer-events:none;opacity:.8;}
+.oncall-sel.conflict{border-color:var(--red);background:rgba(239,68,68,.08);}
+.unavail-hint{font-size:9px;color:var(--red);margin-top:2px;}
+
+/* ── Stats bar ── */
+.stats-row{display:flex;gap:8px;flex-wrap:wrap;}
+.stat-chip{background:var(--s3);border:1px solid var(--border);border-radius:8px;padding:8px 12px;display:flex;align-items:center;gap:8px;}
+.stat-dot{width:8px;height:8px;border-radius:50%;}
+.stat-n{font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:600;}
+.stat-label{font-size:10px;color:var(--text2);}
+
+/* ── Violations ── */
+.viol{display:flex;align-items:flex-start;gap:8px;padding:7px 10px;border-radius:7px;font-size:11px;margin-bottom:4px;}
+.viol.err{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);color:#fca5a5;}
+.viol.warn{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.25);color:#fcd34d;}
+
+/* ── Mail composer ── */
+.mail-card{background:var(--s3);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;}
+.mail-header{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.mail-to{font-size:11px;color:var(--text2);}
+.mail-subj{font-size:12px;font-weight:600;}
+.mail-preview{font-size:11px;color:var(--text2);line-height:1.6;white-space:pre-wrap;}
+
+/* ── Remind badge ── */
+.remind-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.remind-name{width:50px;font-weight:600;}
+.remind-bar{flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden;}
+.remind-fill{height:100%;border-radius:3px;transition:width .4s;}
+.remind-days{font-size:10px;color:var(--text2);font-family:'IBM Plex Mono',monospace;}
+
+/* ── AI thinking ── */
+.ai-thinking{display:flex;align-items:center;gap:10px;padding:12px;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.2);border-radius:8px;font-size:12px;color:#a5b4fc;}
+.dot-pulse{display:flex;gap:4px;}
+.dot-pulse span{width:6px;height:6px;border-radius:50%;background:#818cf8;animation:pulse 1.2s ease-in-out infinite;}
+.dot-pulse span:nth-child(2){animation-delay:.2s;}
+.dot-pulse span:nth-child(3){animation-delay:.4s;}
+@keyframes pulse{0%,80%,100%{transform:scale(.6);opacity:.4;}40%{transform:scale(1);opacity:1;}}
+
+/* ── JSON import/export ── */
+.data-row{display:flex;gap:8px;}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:16px;right:16px;padding:10px 16px;border-radius:8px;font-size:12px;z-index:9999;transform:translateY(50px);opacity:0;transition:all .3s;background:var(--s3);border:1px solid var(--border);}
+.toast.show{transform:translateY(0);opacity:1;}
+.toast.ok{border-color:var(--green);color:var(--green);}
+.toast.ng{border-color:var(--red);color:var(--red);}
+.toast.info{border-color:var(--accent);color:var(--accent);}
+
+/* ── Drag handle ── */
+.drag-handle{cursor:grab;color:var(--text3);font-size:14px;padding:0 4px;}
+.dragging{opacity:.4;border:2px dashed var(--accent)!important;}
+.drag-over{border:2px solid var(--accent)!important;background:rgba(59,130,246,.12)!important;}
+
+/* ── Chat panel ── */
+.chat-wrap{display:flex;flex-direction:column;height:100%;gap:0;}
+.chat-messages{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;min-height:200px;max-height:340px;}
+.chat-msg{display:flex;gap:8px;align-items:flex-start;}
+.chat-msg.user{flex-direction:row-reverse;}
+.chat-bubble{padding:8px 12px;border-radius:10px;font-size:12px;line-height:1.6;max-width:85%;}
+.chat-msg.ai .chat-bubble{background:var(--s3);border:1px solid var(--border);color:var(--text);}
+.chat-msg.user .chat-bubble{background:linear-gradient(135deg,var(--accent),var(--accent2));color:white;}
+.chat-avatar{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;margin-top:2px;}
+.chat-msg.ai .chat-avatar{background:var(--s3);border:1px solid var(--border);}
+.chat-msg.user .chat-avatar{background:var(--accent2);}
+.chat-input-row{display:flex;gap:6px;padding:10px;border-top:1px solid var(--border);}
+.chat-input{flex:1;background:var(--s3);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:8px;font-family:inherit;font-size:12px;resize:none;}
+.chat-input:focus{outline:none;border-color:var(--accent);}
+.chat-send{background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;color:white;border-radius:8px;padding:7px 12px;cursor:pointer;font-size:14px;}
+.chat-send:disabled{opacity:.4;cursor:not-allowed;}
+.chat-examples{display:flex;flex-wrap:wrap;gap:4px;padding:0 10px 8px;}
+.chat-ex{font-size:10px;padding:3px 8px;border-radius:12px;background:var(--s3);border:1px solid var(--border);color:var(--text2);cursor:pointer;transition:all .1s;}
+.chat-ex:hover{border-color:var(--accent);color:var(--accent);}
+
+/* ── Special note badge on calendar ── */
+.note-badge{font-size:9px;color:var(--yellow);background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.25);border-radius:3px;padding:1px 4px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:help;}
+
+/* scrollbar */
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+
+/* ── Print ── */
+@media print{
+  .topbar,.nav,.no-print{display:none!important;}
+  .body{grid-template-columns:1fr;}
+  .panel{display:flex!important;overflow:visible;}
+  .cal-cell{break-inside:avoid;}
+  body{background:#fff;color:#000;}
+  .cal-cell{border:1px solid #ccc;background:#fff!important;}
+  .oncall-sel{border:none;background:transparent;font-weight:600;}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- Topbar -->
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-mark">🏥</div>
+    <div>
+      <div class="logo-text">待機表管理システム</div>
+      <div class="logo-sub">血液内科 — Oncall Scheduler</div>
+    </div>
+  </div>
+  <div class="topbar-steps" id="stepPills"></div>
+  <div style="margin-left:12px;display:flex;gap:6px;" class="no-print">
+    <button class="btn btn-ghost" onclick="exportJSON()" title="データ保存">💾 保存</button>
+    <button class="btn btn-ghost" onclick="document.getElementById('importFile').click()" title="データ読込">📂 読込</button>
+    <input type="file" id="importFile" accept=".json" style="display:none" onchange="importJSON(event)">
+    <button class="btn btn-ghost" onclick="window.print()">🖨 印刷</button>
+  </div>
+</div>
+
+<div class="body">
+<!-- Nav -->
+<div class="nav">
+  <div class="nav-btn active" onclick="goPanel('p-duty')" title="①当直表入力" id="nb-duty">📋</div>
+  <div class="nav-btn" onclick="goPanel('p-doctors')" title="②医師設定" id="nb-doctors">👥</div>
+  <div class="nav-btn" onclick="goPanel('p-collect')" title="③不都合日収集" id="nb-collect">✉️<span class="badge" id="collectBadge" style="display:none"></span></div>
+  <div class="nav-btn" onclick="goPanel('p-schedule')" title="④待機表" id="nb-schedule">📅</div>
+  <div style="margin-top:auto;">
+    <div class="nav-btn" onclick="goPanel('p-settings')" title="設定" id="nb-settings">⚙️</div>
+  </div>
+</div>
+
+<!-- Content panels -->
+<div class="content">
+
+<!-- ① 当直表入力 -->
+<div class="panel active" id="p-duty">
+  <div class="card">
+    <div class="card-title"><span>① 病院当直表のアップロード</span></div>
+    <div class="upload-zone" id="uploadZone" onclick="document.getElementById('dutyFile').click()">
+      <input type="file" id="dutyFile" accept=".pdf,.jpg,.jpeg,.png" onchange="handleDutyUpload(event)">
+      <div class="upload-icon">📄</div>
+      <div class="upload-title">PDFまたは写真をドロップ / クリック</div>
+      <div class="upload-sub">当直表（PDF・JPG・PNG）をアップロードすると<br>Claude AIが当直情報を自動抽出します</div>
+    </div>
+    <div id="aiStatus" style="display:none;" class="ai-thinking">
+      <div class="dot-pulse"><span></span><span></span><span></span></div>
+      <span id="aiStatusText">AIが当直表を解析中...</span>
+    </div>
+    <div id="parseResult" style="display:none;"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">
+      <span>当直一覧（手動編集可）</span>
+      <button class="btn btn-ghost" onclick="addDutyRow()">＋ 追加</button>
+    </div>
+    <table style="width:100%;border-collapse:collapse;" id="dutyTable">
+      <thead>
+        <tr style="border-bottom:1px solid var(--border);">
+          <th style="text-align:left;padding:6px 8px;font-size:10px;color:var(--text2);">日付</th>
+          <th style="text-align:left;padding:6px 8px;font-size:10px;color:var(--text2);">医師</th>
+          <th style="text-align:left;padding:6px 8px;font-size:10px;color:var(--text2);">種別</th>
+          <th style="padding:6px 8px;font-size:10px;color:var(--text2);width:36px;"></th>
+        </tr>
+      </thead>
+      <tbody id="dutyTbody"></tbody>
+    </table>
+    <div style="margin-top:12px;display:flex;gap:8px;">
+      <button class="btn btn-primary" onclick="confirmDuties()">✓ 当直を確定して次へ</button>
+    </div>
+  </div>
+
+  <!-- 対象月設定 -->
+  <div class="card">
+    <div class="card-title"><span>対象月</span></div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <select id="selYear" style="background:var(--s3);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-family:inherit;"></select>
+      <select id="selMonth" style="background:var(--s3);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-family:inherit;"></select>
+      <button class="btn btn-ghost" onclick="changeMonth()">更新</button>
+    </div>
+  </div>
+</div>
+
+<!-- ② 医師設定 -->
+<div class="panel" id="p-doctors">
+  <div class="card">
+    <div class="card-title"><span>② 医師情報・外来曜日設定</span></div>
+    <div class="doc-cards" id="docCards"></div>
+    <div style="margin-top:12px;">
+      <button class="btn btn-primary" onclick="saveDocSettings()">✓ 設定を保存して次へ</button>
+    </div>
+  </div>
+</div>
+
+<!-- ③ 不都合日収集 -->
+<div class="panel" id="p-collect">
+  <div class="card">
+    <div class="card-title"><span>③ 個別URLの発行・メール送信</span></div>
+    <div id="tokenList"></div>
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-primary" onclick="sendAllMails()">📧 全員にGmailを開く</button>
+      <button class="btn btn-ghost" onclick="regenerateTokens()">🔄 URLを再生成</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span>回答状況・リマインド管理</span></div>
+    <div id="remindStatus"></div>
+    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-yellow" onclick="sendReminders()">🔔 未回答者にリマインド送信</button>
+      <button class="btn btn-green" onclick="goPanel('p-schedule')">✓ 全員回答済み → 待機表作成</button>
+    </div>
+  </div>
+
+  <!-- Special notes from doctors -->
+  <div class="card">
+    <div class="card-title"><span>📝 医師からの特記事項</span></div>
+    <div id="specialNotesList" style="font-size:12px;"></div>
+    <div style="margin-top:8px;font-size:11px;color:var(--text2);">※ 特記事項は自動配置・AIチャット編集時に考慮されます</div>
+  </div>
+
+  <!-- Preview mail -->
+  <div class="card">
+    <div class="card-title"><span>メール文面プレビュー</span></div>
+    <div id="mailPreview"></div>
+  </div>
+</div>
+
+<!-- ④⑤ 待機表 -->
+<div class="panel" id="p-schedule">
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;" class="no-print">
+    <button class="btn btn-primary" onclick="autoSchedule()">⚡ 自動配置</button>
+    <button class="btn btn-ghost" onclick="undoSchedule()" id="undoBtn" disabled title="元に戻す">↩ Undo</button>
+    <button class="btn btn-ghost" onclick="clearSchedule()">🗑 クリア</button>
+    <div style="flex:1;"></div>
+    <div class="stats-row" id="statsRow"></div>
+  </div>
+
+  <div id="violPanel" style="display:none;">
+    <div id="violList"></div>
+  </div>
+
+  <!-- Chat + Calendar 2カラム -->
+  <div style="display:grid;grid-template-columns:300px 1fr;gap:12px;align-items:start;">
+
+    <!-- Claudeチャット -->
+    <div class="card no-print" style="padding:0;overflow:hidden;">
+      <div style="padding:10px 12px;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);letter-spacing:.08em;display:flex;align-items:center;gap:6px;">
+        💬 AIアシスタントで編集
+      </div>
+      <div class="chat-messages" id="chatMessages">
+        <div class="chat-msg ai">
+          <div class="chat-avatar">🤖</div>
+          <div class="chat-bubble">待機表の編集をお手伝いします。<br>「小沼を15日から16日に変更して」のように話しかけてください。</div>
+        </div>
+      </div>
+      <div class="chat-examples" id="chatExamples">
+        <div class="chat-ex" onclick="fillChat('酒井を3/15から3/16に変更して')">例: 日付変更</div>
+        <div class="chat-ex" onclick="fillChat('今月の週末担当を教えて')">例: 確認</div>
+        <div class="chat-ex" onclick="fillChat('制約違反を全部直して')">例: 自動修正</div>
+        <div class="chat-ex" onclick="fillChat('田中と幸髙の3/20を交換して')">例: 交換</div>
+      </div>
+      <div class="chat-input-row">
+        <textarea class="chat-input" id="chatInput" rows="2" placeholder="例：小沼を15日から16日に変更して" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat();}"></textarea>
+        <button class="chat-send" id="chatSendBtn" onclick="sendChat()">➤</button>
+      </div>
+    </div>
+
+    <!-- Calendar -->
+    <div class="card" style="padding:12px;">
+      <div class="card-title">
+        <span id="calTitle">待機表</span>
+        <div style="display:flex;gap:8px;font-size:11px;flex-wrap:wrap;align-items:center;">
+          <span style="color:#818cf8">■ 土日祝(24h)</span>
+          <span style="color:#4ade80">🏥 一般当直</span>
+          <span style="color:#38bdf8">🏨 センター当直</span>
+          <span style="color:#c084fc">🫀 ICU当直</span>
+          <span style="color:var(--red)">■ 制約違反</span>
+          <span style="color:var(--yellow)">📝 特記あり</span>
+        </div>
+      </div>
+      <div class="cal-wrap">
+        <div class="cal-grid" id="calGrid"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ⚙ 設定 -->
+<div class="panel" id="p-settings">
+  <div class="card">
+    <div class="card-title"><span>制約設定</span></div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <label style="display:flex;align-items:center;gap:10px;font-size:12px;">
+        最大連続待機日数:
+        <input type="number" id="maxConsec" value="2" min="1" max="7" style="width:60px;background:var(--s3);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:6px;font-family:inherit;font-size:13px;">
+      </label>
+      <label style="display:flex;align-items:center;gap:10px;font-size:12px;">
+        公平性の許容差（回）:
+        <input type="number" id="fairnessTol" value="2" min="0" max="5" style="width:60px;background:var(--s3);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:6px;font-family:inherit;font-size:13px;">
+      </label>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title"><span>Claude API Key</span></div>
+    <div style="font-size:11px;color:var(--text2);margin-bottom:8px;">当直表PDFのAI解析に使用します。ブラウザ内のみで処理され、外部送信されません。</div>
+    <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-..." style="width:100%;background:var(--s3);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-family:'IBM Plex Mono',monospace;font-size:12px;" oninput="saveApiKey()">
+    <div style="margin-top:8px;font-size:11px;color:var(--text2);">※ localStorageに保存されます（このブラウザのみ）</div>
+  </div>
+</div>
+
+</div><!-- /content -->
+</div><!-- /body -->
+</div><!-- /app -->
+
+<div class="toast" id="toast"></div>
+
+<!-- Unavail input modal -->
+<div id="unavailModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;align-items:center;justify-content:center;">
+  <div style="background:var(--s2);border:1px solid var(--border2);border-radius:14px;padding:20px;width:420px;max-width:95vw;max-height:90vh;overflow-y:auto;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+      <div id="modalDocDot" style="width:12px;height:12px;border-radius:50%;"></div>
+      <div style="font-size:14px;font-weight:700;" id="modalTitle">不都合日入力</div>
+      <button onclick="closeModal()" style="margin-left:auto;background:var(--s3);border:1px solid var(--border);color:var(--text);padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px;">✕ 閉じる</button>
+    </div>
+    <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">タップ/クリックで不都合日をトグル（🔴不可）</div>
+    <div id="modalCal" style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;"></div>
+    <div style="margin-top:14px;text-align:right;">
+      <button class="btn btn-primary" onclick="closeModal()">✓ 保存して閉じる</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════
+const WD = ['日','月','火','水','木','金','土'];
+const DOC_COLORS = ['#3b82f6','#f59e0b','#10b981','#f43f5e'];
+const JP_HOLIDAYS = new Set([
+  '2025-1-1','2025-1-13','2025-2-11','2025-2-23','2025-2-24','2025-3-20',
+  '2025-4-29','2025-5-3','2025-5-4','2025-5-5','2025-5-6',
+  '2025-7-21','2025-8-11','2025-9-15','2025-9-23','2025-10-13',
+  '2025-11-3','2025-11-23','2025-12-23',
+  '2026-1-1','2026-1-12','2026-2-11','2026-2-23','2026-3-20',
+  '2026-4-29','2026-5-3','2026-5-4','2026-5-5','2026-5-6',
+]);
+
+let S = {
+  year: 2025, month: 3,
+  doctors: [
+    {name:'小沼', email:'', clinic:[], token: rand()},
+    {name:'幸髙', email:'', clinic:[], token: rand()},
+    {name:'酒井', email:'', clinic:[], token: rand()},
+    {name:'田中', email:'', clinic:[], token: rand()},
+  ],
+  duties: [],       // {day, docIdx, type}
+  unavailable: {0:[],1:[],2:[],3:[]},
+  schedule: {},     // day -> docIdx | null
+  responded: {0:false,1:false,2:false,3:false},
+  dutiesConfirmed: false,
+  maxConsec: 2,
+  fairnessTol: 2,
+};
+let currentModalDoc = null;
+
+function rand(){ return Math.random().toString(36).slice(2,10); }
+
+// ════════════════════════════════════════
+// HELPERS
+// ════════════════════════════════════════
+function daysInMonth(y,m){ return new Date(y,m,0).getDate(); }
+function firstDow(y,m){ return new Date(y,m-1,1).getDay(); }
+function dow(y,m,d){ return new Date(y,m-1,d).getDay(); }
+function isOff(y,m,d){ const w=dow(y,m,d); return w===0||w===6||JP_HOLIDAYS.has(`${y}-${m}-${d}`); }
+function isHol(y,m,d){ return JP_HOLIDAYS.has(`${y}-${m}-${d}`); }
+
+function toast(msg,type='ok'){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.className=`toast show ${type}`;
+  setTimeout(()=>t.className='toast',2800);
+}
+
+function goPanel(id){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  const map={  'p-duty':'nb-duty','p-doctors':'nb-doctors',
+    'p-collect':'nb-collect','p-schedule':'nb-schedule','p-settings':'nb-settings'};
+  document.getElementById(map[id])?.classList.add('active');
+  if(id==='p-schedule') renderCalendar();
+  if(id==='p-collect') renderCollect();
+  updateSteps();
+}
+
+// ════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════
+function init(){
+  // Month selectors
+  const ySel=document.getElementById('selYear');
+  const mSel=document.getElementById('selMonth');
+  for(let y=2025;y<=2027;y++) ySel.innerHTML+=`<option value="${y}" ${y===S.year?'selected':''}>${y}年</option>`;
+  for(let m=1;m<=12;m++) mSel.innerHTML+=`<option value="${m}" ${m===S.month?'selected':''}>${m}月</option>`;
+
+  // API key
+  const saved=localStorage.getItem('oncall_apikey');
+  if(saved) document.getElementById('apiKeyInput').value=saved;
+
+  // Settings
+  document.getElementById('maxConsec').value=S.maxConsec;
+  document.getElementById('fairnessTol').value=S.fairnessTol;
+  document.getElementById('maxConsec').oninput=()=>S.maxConsec=+document.getElementById('maxConsec').value;
+  document.getElementById('fairnessTol').oninput=()=>S.fairnessTol=+document.getElementById('fairnessTol').value;
+
+  renderDocCards();
+  renderDutyTable();
+  renderSteps();
+  updateSteps();
+
+  // Drag & drop upload
+  const zone=document.getElementById('uploadZone');
+  zone.addEventListener('dragover',e=>{e.preventDefault();zone.classList.add('drag');});
+  zone.addEventListener('dragleave',()=>zone.classList.remove('drag'));
+  zone.addEventListener('drop',e=>{e.preventDefault();zone.classList.remove('drag');
+    const f=e.dataTransfer.files[0]; if(f) processDutyFile(f);});
+}
+
+function saveApiKey(){
+  localStorage.setItem('oncall_apikey', document.getElementById('apiKeyInput').value.trim());
+}
+
+function changeMonth(){
+  S.year=+document.getElementById('selYear').value;
+  S.month=+document.getElementById('selMonth').value;
+  S.schedule={};
+  S.duties.forEach(dt=>{ S.schedule[dt.day]=dt.docIdx; });
+  renderCalendar();
+  toast(`${S.year}年${S.month}月に変更しました`,'info');
+}
+
+// ════════════════════════════════════════
+// STEP PILLS
+// ════════════════════════════════════════
+const STEPS=[
+  {label:'① 当直入力',key:'duty'},
+  {label:'② 医師設定',key:'doctors'},
+  {label:'③ 不都合収集',key:'collect'},
+  {label:'④ 待機表',key:'schedule'},
+];
+function renderSteps(){
+  document.getElementById('stepPills').innerHTML=STEPS.map((s,i)=>
+    `<div class="step-pill" id="sp-${s.key}">
+      <div class="step-num">${i+1}</div>${s.label}
+    </div>`
+  ).join('<span style="color:var(--border2);font-size:12px;">›</span>');
+}
+function updateSteps(){
+  const doneSet=new Set();
+  if(S.dutiesConfirmed) doneSet.add('duty');
+  if(S.doctors.every(d=>d.email)) doneSet.add('doctors');
+  if(Object.values(S.responded).every(Boolean)) doneSet.add('collect');
+  if(Object.keys(S.schedule).length>0) doneSet.add('schedule');
+  STEPS.forEach(s=>{
+    const el=document.getElementById(`sp-${s.key}`);
+    if(!el) return;
+    el.classList.remove('active','done');
+    if(doneSet.has(s.key)) el.classList.add('done');
+  });
+  // badge
+  const pending=Object.values(S.responded).filter(v=>!v).length;
+  document.getElementById('collectBadge').style.display=pending&&S.dutiesConfirmed?'block':'none';
+}
+
+// ════════════════════════════════════════
+// ① DUTY FILE UPLOAD + AI PARSE
+// ════════════════════════════════════════
+function handleDutyUpload(e){
+  const f=e.target.files[0]; if(!f) return;
+  processDutyFile(f);
+}
+
+async function processDutyFile(file){
+  const apiKey=document.getElementById('apiKeyInput').value.trim();
+  const aiStatus=document.getElementById('aiStatus');
+  const parseResult=document.getElementById('parseResult');
+  aiStatus.style.display='flex';
+  document.getElementById('aiStatusText').textContent='AIが当直表を解析中...';
+  parseResult.style.display='none';
+
+  try {
+    // Read file as base64
+    const b64=await fileToBase64(file);
+    const mediaType=file.type||'image/jpeg';
+
+    if(!apiKey){
+      // Demo mode: manual prompt
+      aiStatus.style.display='none';
+      toast('APIキーが未設定です。設定画面で入力してください','ng');
+      return;
+    }
+
+    const isImage=mediaType.startsWith('image/');
+    const isPDF=mediaType==='application/pdf';
+
+    const contentBlock = isPDF
+      ? {type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}}
+      : {type:'image',source:{type:'base64',media_type:mediaType,data:b64}};
+
+    const prompt=`あなたは病院の当直表を読み取るアシスタントです。
+この画像/PDFは病院全体の当直表です。複数の列（ICU当直・センター当直・一般当直・一般日直など）があります。
+
+【タスク】
+以下の血液内科医師のみを対象に、すべての当直・日直情報を抽出してください。
+対象医師（姓のみでの一致も可）: ${S.doctors.map(d=>d.name).join('、')}
+
+【表の読み方】
+- 行番号 = 日付（その月の何日か）
+- 赤字の行 = 土日祝日
+- 「血液」「血液内科」という科名が医師名の横に記載されている場合があります
+- ICU当直・センター当直・一般当直・一般日直・日直などすべての列を確認すること
+- 「透析」「腎臓」「眼科」など他科の医師は除外すること
+
+【出力フォーマット】
+JSON配列のみを返してください。他の文字・説明・マークダウンは一切不要。
+[
+  {"day": 7, "docIdx": 2, "type": "一般日直"},
+  {"day": 10, "docIdx": 0, "type": "一般当直"}
+]
+
+docIdx の対応:
+${S.doctors.map((d,i)=>`  ${i} = ${d.name}`).join('\n')}
+
+typeは以下のいずれか: 「一般当直」「一般日直」「センター当直」「ICU当直」
+
+対象医師が見つからない場合は空配列 [] を返してください。`;
+
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:1000,
+        messages:[{role:'user',content:[contentBlock,{type:'text',text:prompt}]}]
+      })
+    });
+
+    const data=await res.json();
+    if(data.error){ throw new Error(data.error.message); }
+
+    const text=data.content.map(c=>c.text||'').join('');
+    const cleaned=text.replace(/```json|```/g,'').trim();
+    const parsed=JSON.parse(cleaned);
+
+    // Apply
+    S.duties=parsed;
+    S.schedule={};
+    parsed.forEach(dt=>{ S.schedule[dt.day]=dt.docIdx; });
+    aiStatus.style.display='none';
+
+    // Show result with type breakdown
+    const typeCount={};
+    parsed.forEach(dt=>{ typeCount[dt.type]=(typeCount[dt.type]||0)+1; });
+    const typeSummary=Object.entries(typeCount).map(([t,n])=>`${t}×${n}`).join('、');
+
+    parseResult.innerHTML=`<div class="parse-result">
+      <div style="font-size:11px;color:var(--green);margin-bottom:4px;">✓ ${parsed.length}件の当直を検出（${typeSummary}）</div>
+      <div style="font-size:10px;color:var(--text2);margin-bottom:10px;">対象外の科（麻酔科・外科など）は自動除外されています</div>`
+      +parsed.sort((a,b)=>a.day-b.day).map(dt=>`<div class="parse-row">
+        <div class="parse-date">${S.month}/${dt.day}(${WD[dow(S.year,S.month,dt.day)]})</div>
+        <div class="parse-doc" style="color:${DOC_COLORS[dt.docIdx]}">${S.doctors[dt.docIdx]?.name}</div>
+        <div class="parse-type">${dt.type}</div>
+        <div class="parse-check">✓</div>
+      </div>`).join('')+'</div>';
+    parseResult.style.display='block';
+
+    renderDutyTable();
+    toast(`${parsed.length}件の当直を自動抽出しました`);
+
+  } catch(err){
+    aiStatus.style.display='none';
+    toast('AI解析エラー: '+err.message,'ng');
+    console.error(err);
+  }
+}
+
+function fileToBase64(file){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=()=>res(r.result.split(',')[1]);
+    r.onerror=()=>rej(new Error('読み込み失敗'));
+    r.readAsDataURL(file);
+  });
+}
+
+// ════════════════════════════════════════
+// DUTY TABLE
+// ════════════════════════════════════════
+function renderDutyTable(){
+  const tbody=document.getElementById('dutyTbody');
+  const sorted=[...S.duties].sort((a,b)=>a.day-b.day);
+  if(!sorted.length){
+    tbody.innerHTML=`<tr><td colspan="4" style="text-align:center;padding:14px;color:var(--text2);font-size:12px;">当直なし（または未入力）</td></tr>`;
+    return;
+  }
+  tbody.innerHTML=sorted.map((dt,i)=>`
+    <tr style="border-bottom:1px solid var(--border);" id="dtr-${i}">
+      <td style="padding:5px 8px;">
+        <input type="number" value="${dt.day}" min="1" max="31" onchange="updateDuty(${i},'day',this.value)"
+          style="width:50px;background:var(--s3);border:1px solid var(--border);color:var(--text);padding:3px 6px;border-radius:5px;font-family:inherit;font-size:12px;">
+        <span style="color:var(--text2);font-size:11px;">(${WD[dow(S.year,S.month,dt.day)]})</span>
+      </td>
+      <td style="padding:5px 8px;">
+        <select onchange="updateDuty(${i},'docIdx',this.value)"
+          style="background:var(--s3);border:1px solid var(--border);color:${DOC_COLORS[dt.docIdx]};padding:3px 6px;border-radius:5px;font-family:inherit;font-size:12px;">
+          ${S.doctors.map((d,di)=>`<option value="${di}" ${di===dt.docIdx?'selected':''}>${d.name}</option>`).join('')}
+        </select>
+      </td>
+      <td style="padding:5px 8px;">
+        <select onchange="updateDuty(${i},'type',this.value)"
+          style="background:var(--s3);border:1px solid var(--border);color:var(--text);padding:3px 6px;border-radius:5px;font-family:inherit;font-size:12px;">
+          ${['一般当直','一般日直','センター当直','ICU当直'].map(t=>`<option ${t===dt.type?'selected':''}>${t}</option>`).join('')}
+        </select>
+      </td>
+      <td style="padding:5px 8px;">
+        <button onclick="deleteDuty(${i})" style="background:rgba(239,68,68,.15);border:none;color:var(--red);border-radius:5px;padding:3px 8px;cursor:pointer;font-size:12px;">✕</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function updateDuty(idx,field,val){
+  const sorted=[...S.duties].sort((a,b)=>a.day-b.day);
+  const dt=sorted[idx];
+  const real=S.duties.indexOf(dt);
+  if(field==='day') S.duties[real].day=+val;
+  else if(field==='docIdx') S.duties[real].docIdx=+val;
+  else S.duties[real].type=val;
+  renderDutyTable();
+}
+
+function deleteDuty(idx){
+  const sorted=[...S.duties].sort((a,b)=>a.day-b.day);
+  const dt=sorted[idx];
+  S.duties.splice(S.duties.indexOf(dt),1);
+  renderDutyTable();
+}
+
+function addDutyRow(){
+  S.duties.push({day:1,docIdx:0,type:'一般当直'});
+  renderDutyTable();
+}
+
+function confirmDuties(){
+  S.dutiesConfirmed=true;
+  S.schedule={};
+  S.duties.forEach(dt=>{ S.schedule[dt.day]=dt.docIdx; });
+  toast('当直を確定しました。②医師設定へ進んでください');
+  updateSteps();
+  goPanel('p-doctors');
+}
+
+// ════════════════════════════════════════
+// ② DOCTOR CARDS
+// ════════════════════════════════════════
+function renderDocCards(){
+  document.getElementById('docCards').innerHTML=S.doctors.map((d,i)=>`
+    <div class="doc-card">
+      <div class="doc-header">
+        <div class="doc-dot" style="background:${DOC_COLORS[i]}"></div>
+        <input class="doc-name-input" value="${d.name}" onchange="S.doctors[${i}].name=this.value;renderDutyTable();" id="dname-${i}">
+        <button onclick="replaceDoctor(${i})" title="この医師を新しい医師に交代（全データリセット）"
+          style="margin-left:auto;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#f87171;border-radius:5px;padding:2px 7px;cursor:pointer;font-size:10px;">
+          🔄 交代
+        </button>
+      </div>
+      <div style="font-size:10px;color:var(--text2);margin-bottom:3px;">メールアドレス</div>
+      <input class="doc-email-input" type="email" value="${d.email}" placeholder="例: onuma@hospital.jp"
+        onchange="S.doctors[${i}].email=this.value;" id="demail-${i}">
+      <div style="font-size:10px;color:var(--text2);margin:8px 0 4px;">外来曜日（毎週）</div>
+      <div class="clinic-row">
+        ${['月','火','水','木','金'].map((wn,wi)=>{
+          const wd=wi+1;
+          return `<div class="clinic-btn ${d.clinic.includes(wd)?'on':''}" onclick="toggleClinic(${i},${wd})" id="cl-${i}-${wd}">${wn}</div>`;
+        }).join('')}
+      </div>
+      <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;" onclick="openModal(${i})">
+          📅 不都合日を手入力（${(S.unavailable[i]||[]).length}日設定中）
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function replaceDoctor(i){
+  const oldName = S.doctors[i].name;
+  const newName = prompt(`「${oldName}」を新しい医師に交代します。\n新しい医師の名前を入力してください：`);
+  if(!newName || !newName.trim()) return;
+
+  // 当直データから旧医師のエントリも除去するか確認
+  const dutyCount = S.duties.filter(dt=>dt.docIdx===i).length;
+  const msg = dutyCount > 0
+    ? `「${oldName}」→「${newName.trim()}」に交代します。\n\n・外来曜日・不都合日・メール・URLトークン：リセット\n・当直データ（${dutyCount}件）：旧医師名のまま残す\n\nよろしいですか？`
+    : `「${oldName}」→「${newName.trim()}」に交代します。\n全データをリセットしてよろしいですか？`;
+
+  if(!confirm(msg)) return;
+
+  // リセット
+  S.doctors[i] = {
+    name: newName.trim(),
+    email: '',
+    clinic: [],
+    token: rand(),
+  };
+  S.unavailable[i] = [];
+  S.responded[i] = false;
+
+  // 当直データの医師名は docIdx で紐付いているのでそのまま（新医師が引き継ぐ形）
+  // スケジュールの担当分はそのまま新医師が引き継ぎ
+
+  renderDocCards();
+  renderDutyTable();
+  renderCalendar();
+  updateSteps();
+  toast(`${oldName} → ${newName.trim()} に交代しました`,'info');
+}
+
+function toggleClinic(di,wd){
+  const arr=S.doctors[di].clinic;
+  const idx=arr.indexOf(wd);
+  if(idx>=0) arr.splice(idx,1); else arr.push(wd);
+  renderDocCards();
+}
+
+function saveDocSettings(){
+  // Sync inputs
+  S.doctors.forEach((d,i)=>{
+    d.name=document.getElementById(`dname-${i}`).value;
+    d.email=document.getElementById(`demail-${i}`).value;
+  });
+  toast('医師設定を保存しました');
+  updateSteps();
+  goPanel('p-collect');
+}
+
+// ════════════════════════════════════════
+// UNAVAIL MODAL
+// ════════════════════════════════════════
+function openModal(di){
+  currentModalDoc=di;
+  const d=S.doctors[di];
+  document.getElementById('modalTitle').textContent=`${d.name} の不都合日`;
+  document.getElementById('modalDocDot').style.background=DOC_COLORS[di];
+  renderModalCal();
+  const m=document.getElementById('unavailModal');
+  m.style.display='flex';
+}
+function closeModal(){ document.getElementById('unavailModal').style.display='none'; renderDocCards(); }
+
+function renderModalCal(){
+  const {year:y,month:m}=S;
+  const di=currentModalDoc;
+  const days=daysInMonth(y,m);
+  const first=firstDow(y,m);
+  const unavail=S.unavailable[di]||[];
+  let html=WD.map(w=>`<div style="text-align:center;font-size:9px;color:var(--text2);padding:3px;">${w}</div>`).join('');
+  for(let i=0;i<first;i++) html+=`<div></div>`;
+  for(let d=1;d<=days;d++){
+    const off=isOff(y,m,d);
+    const un=unavail.includes(d);
+    const wd=dow(y,m,d);
+    html+=`<div onclick="toggleUnavail(${d})" style="
+      aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+      font-size:11px;border-radius:5px;cursor:pointer;border:1px solid ${un?'rgba(239,68,68,.5)':'var(--border)'};
+      background:${un?'rgba(239,68,68,.2)':off?'rgba(99,102,241,.08)':'var(--s3)'};
+      color:${un?'#fca5a5':off?'#a5b4fc':'var(--text)'};
+      transition:all .1s;
+    ">${d}</div>`;
+  }
+  document.getElementById('modalCal').innerHTML=html;
+}
+
+function toggleUnavail(day){
+  const di=currentModalDoc;
+  if(!S.unavailable[di]) S.unavailable[di]=[];
+  const arr=S.unavailable[di];
+  const idx=arr.indexOf(day);
+  if(idx>=0) arr.splice(idx,1); else arr.push(day);
+  renderModalCal();
+}
+
+// ════════════════════════════════════════
+// ③ COLLECT
+// ════════════════════════════════════════
+function renderCollect(){
+  renderTokenList();
+  renderRemindStatus();
+  renderMailPreview();
+  renderSpecialNotes();
+}
+
+function renderSpecialNotes(){
+  // 各医師のlocalStorageから特記事項を読み込み（同一ブラウザの場合）
+  const el=document.getElementById('specialNotesList');
+  const notes=S.doctors.map((d,i)=>{
+    const key=`oncall_response_${i}`;
+    try{
+      const data=JSON.parse(localStorage.getItem(key)||'null');
+      return {name:d.name, note:data?.specialNote||'', color:DOC_COLORS[i]};
+    }catch(e){ return {name:d.name, note:'', color:DOC_COLORS[i]}; }
+  });
+  const hasAny=notes.some(n=>n.note);
+  if(!hasAny){ el.innerHTML='<div style="color:var(--text2);">まだ特記事項の提出がありません</div>'; return; }
+  el.innerHTML=notes.map(n=>n.note?`
+    <div style="background:var(--s3);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:10px;margin-bottom:6px;">
+      <div style="font-weight:600;color:${n.color};margin-bottom:4px;">📝 ${n.name}</div>
+      <div style="color:var(--text);white-space:pre-wrap;line-height:1.6;">${n.note}</div>
+    </div>
+  `:'').join('');
+}
+
+function getBaseURL(){ return window.location.href.replace('index.html','').replace(/\/$/, ''); }
+
+function renderTokenList(){
+  document.getElementById('tokenList').innerHTML=S.doctors.map((d,i)=>{
+    const url=`${getBaseURL()}/unavail.html?token=${d.token}&name=${encodeURIComponent(d.name)}&doc=${i}`;
+    const responded=S.responded[i];
+    return `<div class="token-row">
+      <div class="token-doc" style="color:${DOC_COLORS[i]}">${d.name}</div>
+      <div class="token-url" title="${url}">${url}</div>
+      <div class="token-status ${responded?'done':'waiting'}">${responded?'✓ 回答済':'未回答'}</div>
+      <button class="btn btn-ghost" style="font-size:11px;padding:3px 8px;" onclick="copyURL(${i})">コピー</button>
+      <button class="btn btn-ghost" style="font-size:11px;padding:3px 8px;" onclick="markResponded(${i})">${responded?'✓':'✓ 手動確認'}</button>
+    </div>`;
+  }).join('');
+}
+
+function copyURL(di){
+  const d=S.doctors[di];
+  const url=`${getBaseURL()}/unavail.html?token=${d.token}&name=${encodeURIComponent(d.name)}&doc=${di}`;
+  navigator.clipboard.writeText(url).then(()=>toast(`${d.name}のURLをコピーしました`));
+}
+
+function markResponded(di){
+  S.responded[di]=!S.responded[di];
+  renderCollect();
+  updateSteps();
+}
+
+function regenerateTokens(){
+  S.doctors.forEach(d=>d.token=rand());
+  Object.keys(S.responded).forEach(k=>S.responded[k]=false);
+  renderCollect();
+  toast('URLを再生成しました','info');
+}
+
+function renderRemindStatus(){
+  const {year:y,month:m}=S;
+  const deadline=new Date(y,m-1,20);
+  const today=new Date();
+  const remaining=Math.max(0,Math.ceil((deadline-today)/(1000*60*60*24)));
+
+  document.getElementById('remindStatus').innerHTML=`
+    <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">
+      回答期限: <strong style="color:var(--text)">${y}/${m}/20</strong>
+      （残り <strong style="color:${remaining<3?'var(--red)':'var(--yellow)'}">${remaining}日</strong>）
+    </div>
+    ${S.doctors.map((d,i)=>
+      `<div class="remind-row">
+        <div class="remind-name" style="color:${DOC_COLORS[i]}">${d.name}</div>
+        <div class="remind-bar"><div class="remind-fill" style="width:${S.responded[i]?100:0}%;background:${S.responded[i]?'var(--green)':'var(--border2)'}"></div></div>
+        <div class="remind-days">${S.responded[i]?'✓ 済':'未'}</div>
+      </div>`
+    ).join('')}
+  `;
+}
+
+function renderMailPreview(){
+  const {year:y,month:m}=S;
+  document.getElementById('mailPreview').innerHTML=S.doctors.map((d,i)=>{
+    const url=`${getBaseURL()}/unavail.html?token=${d.token}&name=${encodeURIComponent(d.name)}&doc=${i}`;
+    const body=`${d.name} 先生\n\n${y}年${m}月の待機表作成にあたり、不都合日の入力をお願いします。\n\n期限: ${y}/${m}/20（${WD[new Date(y,m-1,20).getDay()]}）\n\n入力フォーム:\n${url}\n\n※ リンクは先生専用です。他の方には転送しないようお願いします。\n\n酒井 拝`;
+    return `<div class="mail-card">
+      <div class="mail-header">
+        <div class="doc-dot" style="background:${DOC_COLORS[i]};width:8px;height:8px;border-radius:50%;"></div>
+        <div class="mail-to">To: ${d.email||'（メール未設定）'}</div>
+      </div>
+      <div class="mail-subj">【待機表】${y}年${m}月 不都合日のご入力のお願い</div>
+      <div class="mail-preview" style="margin-top:6px;">${body}</div>
+    </div>`;
+  }).join('');
+}
+
+function buildMailtoURL(di, isRemind=false){
+  const d=S.doctors[di];
+  const {year:y,month:m}=S;
+  const url=`${getBaseURL()}/unavail.html?token=${d.token}&name=${encodeURIComponent(d.name)}&doc=${di}`;
+  const subj=isRemind
+    ? `【リマインド】${y}年${m}月 待機表 不都合日の入力をお願いします`
+    : `【待機表】${y}年${m}月 不都合日のご入力のお願い`;
+  const body=isRemind
+    ? `${d.name} 先生\n\n${y}年${m}月の不都合日入力がまだ完了していません。\n期限は${m}/20です。お手数ですが以下よりご入力ください。\n\n${url}\n\n酒井 拝`
+    : `${d.name} 先生\n\n${y}年${m}月の待機表作成にあたり、不都合日の入力をお願いします。\n\n期限: ${y}/${m}/20\n入力フォーム: ${url}\n\n酒井 拝`;
+  return `mailto:${d.email}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`;
+}
+
+function sendAllMails(){
+  S.doctors.forEach((d,i)=>{
+    if(!d.email){ toast(`${d.name}のメールアドレスが未設定です`,'ng'); return; }
+    setTimeout(()=>window.open(buildMailtoURL(i),'_blank'), i*400);
+  });
+  toast('Gmailの下書きが開きます（ポップアップを許可してください）','info');
+}
+
+function sendReminders(){
+  const pending=S.doctors.filter((_,i)=>!S.responded[i]&&S.doctors[i].email);
+  if(!pending.length){ toast('全員回答済みです','ok'); return; }
+  pending.forEach((d,idx)=>{
+    const i=S.doctors.indexOf(d);
+    setTimeout(()=>window.open(buildMailtoURL(i,true),'_blank'), idx*400);
+  });
+  toast(`${pending.length}名にリマインドメールを開きます`,'info');
+}
+
+// ════════════════════════════════════════
+// ④⑤ CALENDAR & AUTO SCHEDULE
+// ════════════════════════════════════════
+function renderCalendar(){
+  const {year:y,month:m}=S;
+  const days=daysInMonth(y,m);
+  const first=firstDow(y,m);
+  document.getElementById('calTitle').textContent=`${y}年${m}月 待機表`;
+
+  let html=WD.map((w,i)=>`<div class="cal-hdr ${i===0?'sun':i===6?'sat':''}">${w}</div>`).join('');
+  for(let i=0;i<first;i++) html+=`<div class="cal-cell empty"></div>`;
+
+  for(let d=1;d<=days;d++){
+    const off=isOff(y,m,d);
+    const wd=dow(y,m,d);
+    const duty=S.duties.find(x=>x.day===d);
+    const assigned=S.schedule[d];
+    const unavailDocs=[];
+    for(let i=0;i<4;i++) if((S.unavailable[i]||[]).includes(d)) unavailDocs.push(i);
+    const clinicDocs=[];
+    for(let i=0;i<4;i++) if((S.doctors[i].clinic||[]).includes(wd)) clinicDocs.push(i);
+    const locked=duty && duty.docIdx===assigned;
+    const conflict=assigned!=null && (unavailDocs.includes(assigned)||clinicDocs.includes(assigned));
+    const cls=locked?'locked':conflict?'conflict':assigned!=null?'assigned':'';
+
+    const dutyChipColor = duty
+      ? duty.type==='ICU当直'     ? 'background:rgba(168,85,247,.15);border-color:rgba(168,85,247,.4);color:#c084fc;'
+      : duty.type==='センター当直' ? 'background:rgba(14,165,233,.15);border-color:rgba(14,165,233,.4);color:#38bdf8;'
+      : 'background:rgba(16,185,129,.12);border-color:rgba(16,185,129,.25);color:#4ade80;'
+      : '';
+    const dutyIcon = duty
+      ? duty.type==='ICU当直' ? '🫀' : duty.type==='センター当直' ? '🏨' : '🏥'
+      : '';
+
+    // 特記メモを収集（不都合日ページからの自由記載）
+    const notes = [];
+    for(let i=0;i<4;i++){
+      const n=(S.specialNotes||{})[i];
+      if(n && n[d]) notes.push({name:S.doctors[i].name, text:n[d]});
+    }
+
+    html+=`<div class="cal-cell ${off?'weekend':''}"
+      draggable="${!locked}"
+      ondragstart="dragStart(event,${d})"
+      ondragover="dragOver(event)"
+      ondragleave="dragLeave(event)"
+      ondrop="dragDrop(event,${d})"
+      data-day="${d}">
+      <div class="c-date">${d}(${WD[wd]})</div>
+      ${duty?`<div class="duty-chip" style="${dutyChipColor}">${dutyIcon}${S.doctors[duty.docIdx]?.name}(${duty.type})</div>`:''}
+      <select class="oncall-sel ${cls}" onchange="manualSet(${d},this.value)" ${locked?'disabled':''}>
+        <option value="">─</option>
+        ${S.doctors.map((doc,i)=>{
+          const tag=unavailDocs.includes(i)?'[不可]':clinicDocs.includes(i)?'[外来]':'';
+          return `<option value="${i}" ${assigned===i?'selected':''}>${doc.name}${tag}</option>`;
+        }).join('')}
+      </select>
+      ${unavailDocs.length?`<div class="unavail-hint">不可:${unavailDocs.map(i=>S.doctors[i].name).join('/')}</div>`:''}
+      ${notes.map(n=>`<div class="note-badge" title="${n.name}：${n.text}">📝${n.name}:${n.text.slice(0,10)}${n.text.length>10?'…':''}</div>`).join('')}
+    </div>`;
+  }
+  document.getElementById('calGrid').innerHTML=html;
+  renderStats();
+  checkViolations();
+}
+
+function manualSet(day,val){
+  pushUndo();
+  S.schedule[day]=val===''?null:+val;
+  renderCalendar();
+}
+
+// ════════════════════════════════════════
+// UNDO
+// ════════════════════════════════════════
+const undoStack=[];
+function pushUndo(){
+  undoStack.push(JSON.stringify(S.schedule));
+  if(undoStack.length>30) undoStack.shift();
+  document.getElementById('undoBtn').disabled=false;
+}
+function undoSchedule(){
+  if(!undoStack.length) return;
+  S.schedule=JSON.parse(undoStack.pop());
+  if(!undoStack.length) document.getElementById('undoBtn').disabled=true;
+  renderCalendar();
+  toast('元に戻しました','info');
+}
+
+// ════════════════════════════════════════
+// DRAG & DROP
+// ════════════════════════════════════════
+let dragFromDay=null;
+function dragStart(e,day){
+  dragFromDay=day;
+  e.currentTarget.classList.add('dragging');
+  e.dataTransfer.effectAllowed='move';
+}
+function dragOver(e){
+  e.preventDefault();
+  e.currentTarget.classList.add('drag-over');
+}
+function dragLeave(e){
+  e.currentTarget.classList.remove('drag-over');
+}
+function dragDrop(e,toDay){
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  document.querySelectorAll('.cal-cell').forEach(c=>c.classList.remove('dragging'));
+  if(dragFromDay===null || dragFromDay===toDay) return;
+
+  // 当直日はドロップ先にできない
+  const dutyTo=S.duties.find(dt=>dt.day===toDay);
+  const dutyFrom=S.duties.find(dt=>dt.day===dragFromDay);
+  if(dutyTo||dutyFrom){ toast('当直日は変更できません','ng'); return; }
+
+  pushUndo();
+  const tmp=S.schedule[dragFromDay]??null;
+  S.schedule[dragFromDay]=S.schedule[toDay]??null;
+  S.schedule[toDay]=tmp;
+  dragFromDay=null;
+  renderCalendar();
+  toast('担当を入れ替えました');
+}
+
+// ════════════════════════════════════════
+// AI CHAT EDITOR
+// ════════════════════════════════════════
+let chatHistory=[];
+
+function fillChat(text){
+  document.getElementById('chatInput').value=text;
+  document.getElementById('chatInput').focus();
+}
+
+function addChatMsg(role,text){
+  const wrap=document.getElementById('chatMessages');
+  const isAI=role==='ai';
+  wrap.innerHTML+=`<div class="chat-msg ${role}">
+    <div class="chat-avatar">${isAI?'🤖':'👨‍⚕️'}</div>
+    <div class="chat-bubble">${text.replace(/\n/g,'<br>')}</div>
+  </div>`;
+  wrap.scrollTop=wrap.scrollHeight;
+}
+
+async function sendChat(){
+  const input=document.getElementById('chatInput');
+  const msg=input.value.trim();
+  if(!msg) return;
+  const apiKey=document.getElementById('apiKeyInput').value.trim();
+  if(!apiKey){ toast('APIキーを設定してください','ng'); return; }
+
+  input.value='';
+  addChatMsg('user',msg);
+  document.getElementById('chatSendBtn').disabled=true;
+
+  // 現在の待機表を文字列で表現
+  const {year:y,month:m}=S;
+  const days=daysInMonth(y,m);
+  const scheduleText=[];
+  for(let d=1;d<=days;d++){
+    const di=S.schedule[d];
+    const duty=S.duties.find(x=>x.day===d);
+    const off=isOff(y,m,d);
+    scheduleText.push(`${m}/${d}(${WD[dow(y,m,d)]}${off?'🔴':''}): ${di!=null?S.doctors[di].name:'未配置'}${duty?` [${duty.type}]`:''}`);
+  }
+
+  const systemPrompt=`あなたは血液内科の待機表編集アシスタントです。
+現在の待機表・医師情報をもとに、ユーザーの指示を解釈して変更内容をJSON形式で返してください。
+
+【医師リスト】
+${S.doctors.map((d,i)=>`${i}: ${d.name}`).join('\n')}
+
+【現在の待機表（${y}年${m}月）】
+${scheduleText.join('\n')}
+
+【制約ルール】
+- 当直日（[当直]マーク付き）は変更不可
+- 不都合日: ${JSON.stringify(S.unavailable)}
+- 外来曜日: ${JSON.stringify(S.doctors.map(d=>d.clinic))}
+- 最大連続: ${S.maxConsec}日
+
+【出力形式】
+変更がある場合: {"action":"update","changes":[{"day":15,"docIdx":0},{"day":16,"docIdx":2}],"message":"説明文"}
+変更なし/質問の場合: {"action":"reply","message":"返答テキスト"}
+制約違反がある場合: {"action":"error","message":"理由"}
+
+JSONのみ返してください。`;
+
+  try {
+    chatHistory.push({role:'user',content:msg});
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:800,
+        system:systemPrompt,
+        messages:chatHistory
+      })
+    });
+    const data=await res.json();
+    if(data.error) throw new Error(data.error.message);
+
+    const raw=data.content.map(c=>c.text||'').join('').replace(/```json|```/g,'').trim();
+    const result=JSON.parse(raw);
+    chatHistory.push({role:'assistant',content:raw});
+    if(chatHistory.length>20) chatHistory=chatHistory.slice(-20);
+
+    if(result.action==='update'){
+      pushUndo();
+      result.changes.forEach(c=>{ S.schedule[c.day]=c.docIdx; });
+      renderCalendar();
+      addChatMsg('ai',`✅ ${result.message}`);
+    } else if(result.action==='error'){
+      addChatMsg('ai',`⚠️ ${result.message}`);
+    } else {
+      addChatMsg('ai',result.message);
+    }
+  } catch(err){
+    addChatMsg('ai','エラーが発生しました: '+err.message);
+  }
+  document.getElementById('chatSendBtn').disabled=false;
+}
+
+function renderStats(){
+  const {year:y,month:m}=S;
+  const counts=[0,0,0,0];
+  const offCounts=[0,0,0,0];
+  const days=daysInMonth(y,m);
+  Object.entries(S.schedule).forEach(([ds,di])=>{
+    if(di!=null){ counts[di]++; if(isOff(y,m,+ds)) offCounts[di]++; }
+  });
+  const fw=countFullWeekends(S.schedule,y,m);
+  document.getElementById('statsRow').innerHTML=S.doctors.map((d,i)=>`
+    <div class="stat-chip">
+      <div class="stat-dot" style="background:${DOC_COLORS[i]}"></div>
+      <div>
+        <div class="stat-n" style="color:${DOC_COLORS[i]}">${counts[i]}</div>
+        <div class="stat-label">${d.name}</div>
+        <div style="font-size:9px;color:var(--text2);">土日祝${offCounts[i]}回 / 完全OFF週末${fw[i]}回</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ══════════════════════════════════════════════════════════
+// 休日クラスタ解析ユーティリティ
+// ══════════════════════════════════════════════════════════
+
+// その月の「連休ブロック」を取得（土日祝の連続した塊）
+function getHolidayClusters(y, m){
+  const days = daysInMonth(y, m);
+  const clusters = []; // [{days:[1,2,3], len:3, value:3}]
+  let cur = [];
+  for(let d = 1; d <= days; d++){
+    if(isOff(y,m,d)){
+      cur.push(d);
+    } else {
+      if(cur.length) { clusters.push({days:[...cur], len:cur.length}); cur=[]; }
+    }
+  }
+  if(cur.length) clusters.push({days:[...cur], len:cur.length});
+  return clusters;
+}
+
+// 各医師の「完全OFF土日セット数」を集計（土曜・日曜の両方OFF＝1セット）
+function countFullWeekends(sch, y, m){
+  const days = daysInMonth(y, m);
+  const result = [0,0,0,0];
+  for(let d = 1; d <= days - 1; d++){
+    const wd = dow(y,m,d);
+    if(wd === 6){ // 土曜
+      const sun = d + 1;
+      // 土曜・日曜の両方が待機でない医師を探す
+      for(let i = 0; i < 4; i++){
+        if(sch[d] !== i && sch[sun] !== i){
+          result[i]++;
+        }
+      }
+      break; // 1回だけカウントしないよう修正 → 全週カウントへ
+    }
+  }
+  // 正確に全週カウント
+  const res2 = [0,0,0,0];
+  for(let d = 1; d <= days - 1; d++){
+    const wd = dow(y,m,d);
+    if(wd === 6 && d+1 <= days){ // 土曜があって翌日も月内
+      for(let i = 0; i < 4; i++){
+        const satFree = sch[d] !== i;
+        const sunFree = sch[d+1] !== i;
+        if(satFree && sunFree) res2[i]++;
+      }
+    }
+  }
+  return res2;
+}
+
+// ══════════════════════════════════════════════════════════
+// メインスケジューラ
+// ══════════════════════════════════════════════════════════
+function autoSchedule(){
+  const {year:y, month:m} = S;
+  const days = daysInMonth(y, m);
+
+  // 当直日は固定
+  const fixedSch = {};
+  S.duties.forEach(dt => { fixedSch[dt.day] = dt.docIdx; });
+
+  // 連休クラスタを取得・価値付け（長い連休ほど高価値）
+  const clusters = getHolidayClusters(y, m);
+
+  // ── フェーズ1：連休ブロックを先に割り当て ──
+  // 各クラスタを「価値が高い順」（長い連休優先）にソート
+  const sortedClusters = [...clusters].sort((a,b) => b.len - a.len);
+
+  // 試行を複数回行い、最もフルOFF週末が均等な解を採用
+  let bestSch = null;
+  let bestScore = -Infinity;
+
+  for(let trial = 0; trial < 80; trial++){
+    const newSch = {...fixedSch};
+    const offCounts = [0,0,0,0]; // 土日祝の担当回数
+
+    // フェーズ1: 連休クラスタ内の割り当て（クラスタ単位で担当者を決める）
+    for(const cluster of sortedClusters){
+      // このクラスタの各日に当直固定がある場合は確認
+      const fixedDocs = cluster.days
+        .filter(d => fixedSch[d] !== undefined)
+        .map(d => fixedSch[d]);
+
+      // クラスタ内の未固定の日
+      const freeDays = cluster.days.filter(d => newSch[d] === undefined);
+      if(!freeDays.length) continue;
+
+      // クラスタ担当候補を選ぶ
+      // 長い連休(3日以上)は分割も許可、2日以下は同一人物で
+      if(cluster.len <= 2){
+        // 土日セット → 同一人物に割り当て
+        const cands = [];
+        for(let i = 0; i < 4; i++){
+          let ok = true;
+          for(const d of freeDays){
+            const wd2 = dow(y,m,d);
+            if((S.unavailable[i]||[]).includes(d)){ ok=false; break; }
+            if((S.doctors[i].clinic||[]).includes(wd2)){ ok=false; break; }
+            if(S.duties.find(dt=>dt.day===d-1&&dt.docIdx===i)){ ok=false; break; }
+            // 固定当直と同じ医師を避ける（当直日が含まれる場合）
+            if(fixedDocs.includes(i) && !fixedSch[d]){ ok=false; break; }
+          }
+          if(ok) cands.push(i);
+        }
+        if(cands.length){
+          // 土日担当回数が少ない医師を優先、同点はランダム
+          cands.sort((a,b) => {
+            const diff = offCounts[a] - offCounts[b];
+            return diff !== 0 ? diff : Math.random() - 0.5;
+          });
+          const pick = cands[0];
+          freeDays.forEach(d => { newSch[d] = pick; offCounts[pick]++; });
+        }
+      } else {
+        // 3日以上の連休 → できれば分散（ハッピーマンデー型）
+        // 各日を個別に割り当てるが、連続にならないよう制御
+        for(const d of freeDays){
+          const wd2 = dow(y,m,d);
+          const cands2 = [];
+          for(let i = 0; i < 4; i++){
+            if((S.unavailable[i]||[]).includes(d)) continue;
+            if((S.doctors[i].clinic||[]).includes(wd2)) continue;
+            if(S.duties.find(dt=>dt.day===d-1&&dt.docIdx===i)) continue;
+            // 前日が同じ医師の場合は避ける（連続防止）
+            if(newSch[d-1] === i) continue;
+            cands2.push(i);
+          }
+          if(!cands2.length){
+            // 緩和：連続でも許可
+            for(let i = 0; i < 4; i++){
+              if((S.unavailable[i]||[]).includes(d)) continue;
+              if((S.doctors[i].clinic||[]).includes(wd2)) continue;
+              if(S.duties.find(dt=>dt.day===d-1&&dt.docIdx===i)) continue;
+              cands2.push(i);
+            }
+          }
+          if(cands2.length){
+            cands2.sort((a,b)=>{
+              const diff = offCounts[a]-offCounts[b];
+              return diff!==0?diff:Math.random()-.5;
+            });
+            newSch[d]=cands2[0]; offCounts[cands2[0]]++;
+          }
+        }
+      }
+    }
+
+    // フェーズ2: 平日を割り当て
+    const wdCounts = [0,0,0,0]; // 全待機回数
+    Object.values(newSch).forEach(di=>{ if(di!=null) wdCounts[di]++; });
+
+    for(let d = 1; d <= days; d++){
+      if(newSch[d] !== undefined) continue;
+      const wd2 = dow(y,m,d);
+      const cands = [];
+      for(let i = 0; i < 4; i++){
+        if((S.unavailable[i]||[]).includes(d)) continue;
+        if((S.doctors[i].clinic||[]).includes(wd2)) continue;
+        if(S.duties.find(dt=>dt.day===d-1&&dt.docIdx===i)) continue;
+        let consec=0, prev=d-1;
+        while(newSch[prev]===i){ consec++; prev--; }
+        if(consec>=S.maxConsec) continue;
+        // 翌日が土日祝の場合、その医師を避ける（休前日保護）
+        let preHolPenalty = 0;
+        if(d+1<=days && isOff(y,m,d+1)) preHolPenalty = 50;
+        if(d+1<=days && isOff(y,m,d+1) && d+2<=days && isOff(y,m,d+2)) preHolPenalty = 90;
+        cands.push({i, score: wdCounts[i]*10 + consec*20 + preHolPenalty + Math.random()*3});
+      }
+      if(!cands.length) continue;
+      cands.sort((a,b)=>a.score-b.score);
+      newSch[d]=cands[0].i;
+      wdCounts[cands[0].i]++;
+    }
+
+    // この試行のスコアを評価
+    const fwEnds = countFullWeekends(newSch, y, m);
+    const minFW = Math.min(...fwEnds);
+    const totalOff = [0,0,0,0];
+    for(let d=1;d<=days;d++) if(isOff(y,m,d) && newSch[d]!=null) totalOff[newSch[d]]++;
+    const offMax = Math.max(...totalOff), offMin = Math.min(...totalOff.filter(c=>c>0));
+    // スコア：最小完全休み週末数を最大化 + 土日公平性を最大化
+    const trialScore = minFW * 100 - (offMax - offMin) * 10;
+    if(trialScore > bestScore){
+      bestScore = trialScore;
+      bestSch = {...newSch};
+    }
+  }
+
+  S.schedule = bestSch || fixedSch;
+  renderCalendar();
+
+  // 結果サマリ
+  const fw = countFullWeekends(S.schedule, y, m);
+  const minFW = Math.min(...fw);
+  toast(`自動配置完了 ✓ 完全OFF土日: 最小${minFW}回/人 (${fw.map((n,i)=>S.doctors[i].name+n+'回').join(' / ')})`);
+}
+
+// ══════════════════════════════════════════════════════════
+// 違反チェック
+// ══════════════════════════════════════════════════════════
+function checkViolations(){
+  const {year:y,month:m}=S;
+  const viols=[];
+  const days=daysInMonth(y,m);
+
+  Object.entries(S.schedule).forEach(([ds,di])=>{
+    if(di==null) return;
+    const d=+ds; const wd=dow(y,m,d);
+    if((S.unavailable[di]||[]).includes(d))
+      viols.push({t:'err',msg:`${m}/${d} ${S.doctors[di].name}：不都合日`});
+    if((S.doctors[di].clinic||[]).includes(wd))
+      viols.push({t:'err',msg:`${m}/${d} ${S.doctors[di].name}：外来日`});
+    const dutyPrev=S.duties.find(dt=>dt.day===d-1&&dt.docIdx===di);
+    if(dutyPrev)
+      viols.push({t:'err',msg:`${m}/${d} ${S.doctors[di].name}：${dutyPrev.type}翌日`});
+    let consec=1, prev=d-1;
+    while(S.schedule[prev]===di){ consec++; prev--; }
+    if(consec>S.maxConsec)
+      viols.push({t:'err',msg:`${m}/${d} ${S.doctors[di].name}：${consec}連続待機`});
+  });
+
+  // 土日祝の公平性
+  const offCounts=[0,0,0,0];
+  for(let d=1;d<=days;d++){
+    if(isOff(y,m,d) && S.schedule[d]!=null) offCounts[S.schedule[d]]++;
+  }
+  const oMax=Math.max(...offCounts), oMin=Math.min(...offCounts.filter(c=>c>0));
+  if(offCounts.some(c=>c>0) && oMax-oMin>1)
+    viols.push({t:'warn',msg:`土日祝待機の偏り: ${S.doctors.map((d,i)=>d.name+offCounts[i]+'回').join(' / ')}`});
+
+  // 全体公平性
+  const counts=[0,0,0,0];
+  Object.values(S.schedule).forEach(d=>{ if(d!=null) counts[d]++; });
+  const actives=counts.filter(c=>c>0);
+  if(actives.length>1){
+    const mx=Math.max(...actives), mn=Math.min(...actives);
+    if(mx-mn>S.fairnessTol)
+      viols.push({t:'warn',msg:`全体待機回数の偏り: 最大${mx}回 vs 最小${mn}回`});
+  }
+
+  // 連休ブロック内の連続待機チェック
+  const clusters=getHolidayClusters(y,m);
+  for(const cl of clusters){
+    if(cl.len<2) continue;
+    for(let ci=1;ci<cl.days.length;ci++){
+      const d=cl.days[ci], dprev=cl.days[ci-1];
+      const di=S.schedule[d], diprev=S.schedule[dprev];
+      if(di!=null && di===diprev){
+        viols.push({t:'warn',msg:`${m}/${dprev}(${WD[dow(y,m,dprev)]})〜${m}/${d}(${WD[dow(y,m,d)]}) ${S.doctors[di].name}：連休内で連続待機 → 連休消失`});
+      }
+    }
+  }
+
+  // 完全OFF土日セット数の表示
+  const fw=countFullWeekends(S.schedule,y,m);
+  const minFW=Math.min(...fw);
+  if(minFW===0 && Object.keys(S.schedule).length>5)
+    viols.push({t:'warn',msg:`完全OFFの土日ゼロの医師あり: ${S.doctors.map((d,i)=>fw[i]===0?d.name:'').filter(Boolean).join('、')}`});
+
+  const vp=document.getElementById('violPanel');
+  const vl=document.getElementById('violList');
+  if(viols.length){
+    vp.style.display='block';
+    vl.innerHTML=viols.map(v=>`<div class="viol ${v.t}">● ${v.msg}</div>`).join('');
+  } else {
+    vp.style.display='none';
+  }
+}
+
+function clearSchedule(){
+  if(!confirm('手動配置をクリアしますか？（当直分は残ります）')) return;
+  S.schedule={};
+  S.duties.forEach(dt=>{ S.schedule[dt.day]=dt.docIdx; });
+  renderCalendar();
+  toast('配置をクリアしました','info');
+}
+
+// ════════════════════════════════════════
+// JSON SAVE / LOAD
+// ════════════════════════════════════════
+function exportJSON(){
+  const blob=new Blob([JSON.stringify(S,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`待機表_${S.year}_${String(S.month).padStart(2,'0')}.json`;
+  a.click();
+  toast('JSONファイルを保存しました');
+}
+
+function importJSON(e){
+  const file=e.target.files[0]; if(!file) return;
+  const r=new FileReader();
+  r.onload=ev=>{
+    try{
+      const data=JSON.parse(ev.target.result);
+      Object.assign(S,data);
+      // Re-init UI
+      document.getElementById('selYear').value=S.year;
+      document.getElementById('selMonth').value=S.month;
+      document.getElementById('maxConsec').value=S.maxConsec||2;
+      document.getElementById('fairnessTol').value=S.fairnessTol||2;
+      renderDocCards();
+      renderDutyTable();
+      renderCalendar();
+      updateSteps();
+      toast('データを読み込みました');
+    } catch(err){ toast('読み込み失敗: '+err.message,'ng'); }
+  };
+  r.readAsText(file);
+  e.target.value='';
+}
+
+// ════════════════════════════════════════
+// BOOT
+// ════════════════════════════════════════
+init();
+</script>
+</body>
+</html>
