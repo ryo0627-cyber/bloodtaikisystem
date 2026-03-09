@@ -1013,7 +1013,8 @@ function buildMailtoURL(di, isRemind=false){
   const body=isRemind
     ? `${d.name} 先生\n\n${y}年${m}月の不都合日入力がまだ完了していません。\n期限は${m}/20です。お手数ですが以下よりご入力ください。\n\n${url}\n\n酒井 拝`
     : `${d.name} 先生\n\n${y}年${m}月の待機表作成にあたり、不都合日の入力をお願いします。\n\n期限: ${y}/${m}/20\n入力フォーム: ${url}\n\n酒井 拝`;
-  return `mailto:${d.email}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`;
+  // Gmail compose URL（Chromeで直接Gmailが開く）
+  return `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(d.email)}&su=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`;
 }
 
 function sendAllMails(){
