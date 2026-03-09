@@ -202,7 +202,7 @@ function renderCal(){
     let cls='';
     if(isDuty) cls='duty';
     else if(isUnavail) cls='unavail';
-    else if(off) cls=`weekend`;
+    else if(off) cls='weekend';
     else if(isPast) cls='past';
 
     html+=`<div class="day ${cls}" onclick="toggleDay(${d})" title="${y}/${m}/${d}(${WD[wd]})">
@@ -218,8 +218,7 @@ function toggleDay(d){
   const y=curYear,m=curMonth;
   const isDuty=duties.some(x=>x.year===y&&x.month===m&&x.day===d);
   if(isDuty) return;
-  const today=new Date(); today.setHours(0,0,0,0);
-  if(new Date(y,m-1,d)<today) return;
+  // 過去日も不都合日として選択可能（夏季休暇など遡って入力できるように）
 
   const idx=unavailDays.findIndex(x=>x.year===y&&x.month===m&&x.day===d);
   if(idx>=0) unavailDays.splice(idx,1);
