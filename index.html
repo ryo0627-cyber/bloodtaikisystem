@@ -296,7 +296,7 @@ html,body{height:100%;font-family:'Noto Sans JP',sans-serif;background:var(--bg)
     <button class="btn btn-ghost" onclick="exportJSON()" title="データ保存">💾 保存</button>
     <button class="btn btn-ghost" onclick="document.getElementById('importFile').click()" title="データ読込">📂 読込</button>
     <input type="file" id="importFile" accept=".json" style="display:none" onchange="importJSON(event)">
-    <button class="btn btn-ghost" onclick="window.print()">🖨 印刷</button>
+    <button class="btn btn-ghost" onclick="buildPrintTable();window.print()">🖨 印刷</button>
   </div>
 </div>
 
@@ -413,6 +413,19 @@ html,body{height:100%;font-family:'Noto Sans JP',sans-serif;background:var(--bg)
 
 <!-- ④⑤ 待機表 -->
 <div class="panel" id="p-schedule">
+
+  <!-- 印刷用テーブル（画面では非表示、印刷時のみ表示） -->
+  <table id="printTable">
+    <caption id="printCaption"></caption>
+    <thead>
+      <tr>
+        <th>日付</th>
+        <th>当直</th>
+        <th>待機</th>
+      </tr>
+    </thead>
+    <tbody id="printTbody"></tbody>
+  </table>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;" class="no-print">
     <button class="btn btn-primary" onclick="autoSchedule()">⚡ 自動配置</button>
     <button class="btn btn-ghost" onclick="undoSchedule()" id="undoBtn" disabled title="元に戻す">↩ Undo</button>
@@ -564,12 +577,12 @@ let S = {
   duties: [],       // {day, docIdx, type}
   unavailable: {0:[],1:[],2:[],3:[]},
   schedule: {},     // day -> docIdx | null
+  rinban: {},       // day -> true（輪番フラグ）
   responded: {0:false,1:false,2:false,3:false},
   dutiesConfirmed: false,
   maxConsec: 2,
   fairnessTol: 2,
-  // 過去3ヶ月の累積カウント {docIdx: {total, offCount}} の配列（最大3件）
-  monthHistory: [], // [{year,month,counts:[{total,offCount}×4]}]
+  monthHistory: [],
 };
 let currentModalDoc = null;
 
@@ -1208,6 +1221,8 @@ function renderCalendar(){
       if(n && n[d]) notes.push({name:S.doctors[i].name, text:n[d]});
     }
 
+    const isRinban = S.rinban[d] || false;
+
     html+=`<div class="cal-cell ${off?'weekend':''}"
       draggable="${!locked}"
       ondragstart="dragStart(event,${d})"
@@ -1217,13 +1232,19 @@ function renderCalendar(){
       data-day="${d}">
       <div class="c-date">${d}(${WD[wd]})</div>
       ${duty?`<div class="duty-chip" style="${dutyChipColor}">${dutyIcon}${S.doctors[duty.docIdx]?.name}(${duty.type})</div>`:''}
-      <select class="oncall-sel ${cls}" onchange="manualSet(${d},this.value)" ${locked?'disabled':''}>
-        <option value="">─</option>
-        ${S.doctors.map((doc,i)=>{
-          const tag=unavailDocs.includes(i)?'[不可]':clinicDocs.includes(i)?'[外来]':'';
-          return `<option value="${i}" ${assigned===i?'selected':''}>${doc.name}${tag}</option>`;
-        }).join('')}
-      </select>
+      <div style="display:flex;align-items:center;gap:3px;">
+        <select class="oncall-sel ${cls}" onchange="manualSet(${d},this.value)" ${locked?'disabled':''} style="flex:1;">
+          <option value="">─</option>
+          ${S.doctors.map((doc,i)=>{
+            const tag=unavailDocs.includes(i)?'[不可]':clinicDocs.includes(i)?'[外来]':'';
+            return `<option value="${i}" ${assigned===i?'selected':''}>${doc.name}${tag}</option>`;
+          }).join('')}
+        </select>
+        ${assigned!=null?`<button onclick="toggleRinban(${d})" title="輪番フラグ"
+          style="flex-shrink:0;padding:1px 4px;font-size:9px;border-radius:3px;cursor:pointer;border:1px solid ${isRinban?'#e11d48':'#aaa'};background:${isRinban?'rgba(225,29,72,.15)':'transparent'};color:${isRinban?'#e11d48':'#888'};">
+          輪番${isRinban?'✓':''}
+        </button>`:''}
+      </div>
       ${unavailDocs.length?`<div class="unavail-hint">不可:${unavailDocs.map(i=>S.doctors[i].name).join('/')}</div>`:''}
       ${notes.map(n=>`<div class="note-badge" title="${n.name}：${n.text}">📝${n.name}:${n.text.slice(0,10)}${n.text.length>10?'…':''}</div>`).join('')}
     </div>`;
@@ -1236,7 +1257,60 @@ function renderCalendar(){
 function manualSet(day,val){
   pushUndo();
   S.schedule[day]=val===''?null:+val;
+  // 担当が消えたら輪番も消す
+  if(val==='') delete S.rinban[day];
   renderCalendar();
+}
+
+function toggleRinban(day){
+  if(S.rinban[day]) delete S.rinban[day];
+  else S.rinban[day]=true;
+  renderCalendar();
+}
+
+// ══════════════════════════════════════════════════════════
+// 印刷用テーブル生成（縦リスト形式・PDFサンプルに準拠）
+// ══════════════════════════════════════════════════════════
+function buildPrintTable(){
+  const {year:y, month:m} = S;
+  const days = daysInMonth(y, m);
+
+  // キャプション
+  document.getElementById('printCaption').textContent = `${y}年${m}月 血液内科 待機表`;
+
+  const tbody = document.getElementById('printTbody');
+  let html = '';
+
+  for(let d = 1; d <= days; d++){
+    const wd = dow(y, m, d);
+    const off = isOff(y, m, d);
+    const wdStr = WD[wd];
+    const dateStr = `${m}/${d}(${wdStr})`;
+
+    // 当直
+    const duty = S.duties.find(x => x.day === d);
+    const dutyStr = duty ? `${S.doctors[duty.docIdx]?.name}（${duty.type}）` : '';
+
+    // 待機
+    const di = S.schedule[d];
+    let oncallStr = '';
+    if(di != null){
+      const isRinban = S.rinban[d];
+      // 当直と同じ人＝輪番（または手動で輪番フラグ）
+      const isRotation = isRinban || (duty && duty.docIdx === di);
+      oncallStr = isRotation
+        ? `${S.doctors[di].name}（輪番）`
+        : S.doctors[di].name;
+    }
+
+    html += `<tr class="${off ? 'weekend' : ''}">
+      <td class="date-col">${dateStr}</td>
+      <td class="duty-col">${dutyStr}</td>
+      <td class="oncall-col">${oncallStr}</td>
+    </tr>`;
+  }
+
+  tbody.innerHTML = html;
 }
 
 // ════════════════════════════════════════
