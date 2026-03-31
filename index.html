@@ -196,86 +196,67 @@ html,body{height:100%;font-family:'Noto Sans JP',sans-serif;background:var(--bg)
 
 /* ── Print ── */
 @media print{
-  /* 非表示要素 */
+  /* 非表示 */
   .topbar,.nav,.no-print,
-  .viol-panel,#violPanel,
+  #violPanel,.viol-panel,
   .chat-wrap,#chatMessages,
-  .chat-input-row,.chat-examples{display:none!important;}
+  .chat-input-row,.chat-examples,
+  #historyCard,#statsRow,
+  .stats-row{ display:none!important; }
 
-  /* ページ設定 */
-  @page{ size:A4 landscape; margin:12mm; }
-  body{ background:#fff!important; color:#000!important; font-size:10px; }
-  .app{ display:block; }
-  .body{ display:block; }
-
-  /* 待機表パネルのみ表示 */
+  @page{ size:A4 portrait; margin:10mm 15mm; }
+  body{ background:#fff!important; color:#000!important; font-size:11px; }
+  .app,.body{ display:block!important; }
   .panel{ display:none!important; }
   #p-schedule{ display:block!important; }
 
-  /* カレンダーグリッド：2カラム→1カラム */
-  #p-schedule > div[style*="grid"]{
-    display:block!important;
+  /* ─── 1ページ目：縦リスト ─── */
+  #printTable{
+    display:table!important;
+    page-break-after:always;
+    -webkit-print-color-adjust:exact;
+    print-color-adjust:exact;
   }
 
-  /* カレンダーカード */
-  .card{ border:none!important; box-shadow:none!important; padding:0!important; }
-  .card-title{ font-size:13px!important; font-weight:700; margin-bottom:6px; border-bottom:2px solid #000; padding-bottom:4px; }
-
-  /* カレンダーグリッド */
+  /* ─── 2ページ目：カレンダー ─── */
+  #p-schedule > div[style*="grid"]{ display:block!important; }
+  .card{ border:none!important; box-shadow:none!important; padding:4px!important; }
+  .card-title{
+    display:block!important;
+    font-size:12px!important; font-weight:700;
+    margin-bottom:6px; border-bottom:2px solid #000; padding-bottom:4px;
+  }
+  .cal-wrap{ display:block!important; }
   .cal-grid{
     display:grid!important;
     grid-template-columns:repeat(7,1fr)!important;
     gap:2px!important;
   }
   .cal-hdr{
-    background:#333!important;
-    color:#fff!important;
-    text-align:center;
-    font-size:9px;
-    padding:3px;
-    -webkit-print-color-adjust:exact;
-    print-color-adjust:exact;
+    background:#444!important; color:#fff!important;
+    text-align:center; font-size:9px; padding:3px;
+    -webkit-print-color-adjust:exact; print-color-adjust:exact;
   }
   .cal-cell{
-    border:1px solid #ccc!important;
-    background:#fff!important;
-    padding:3px!important;
-    break-inside:avoid;
-    min-height:52px;
+    border:1px solid #bbb!important; background:#fff!important;
+    padding:3px!important; break-inside:avoid; min-height:50px;
+    -webkit-print-color-adjust:exact; print-color-adjust:exact;
   }
   .cal-cell.weekend{
-    background:#fef9f0!important;
-    -webkit-print-color-adjust:exact;
-    print-color-adjust:exact;
+    background:#f9b8c4!important;
+    -webkit-print-color-adjust:exact; print-color-adjust:exact;
   }
-  .c-date{ font-size:9px; color:#555; }
-  .duty-chip{ font-size:8px!important; padding:1px 2px!important; }
+  .c-date{ font-size:9px; color:#333; font-weight:600; }
+  .duty-chip{ font-size:7px!important; padding:1px 2px!important; }
   .oncall-sel{
-    border:none!important;
-    background:transparent!important;
-    font-weight:700!important;
-    font-size:11px!important;
-    color:#000!important;
-    padding:0!important;
-    width:100%!important;
-    appearance:none!important;
-    -webkit-appearance:none!important;
+    border:none!important; background:transparent!important;
+    font-weight:700!important; font-size:10px!important; color:#000!important;
+    padding:0!important; width:100%!important;
+    appearance:none!important; -webkit-appearance:none!important;
   }
-  .unavail-hint{ font-size:7px!important; color:#999!important; }
+  .unavail-hint{ display:none!important; }
   .note-badge{ display:none!important; }
-
-  /* 統計行 */
-  .stats-row{
-    display:flex!important;
-    gap:8px;
-    margin-bottom:6px;
-    font-size:10px;
-  }
-  .stat-card{
-    border:1px solid #ccc!important;
-    background:#fff!important;
-    padding:4px 8px!important;
-  }
+  button{ display:none!important; }
 }
 </style>
 </head>
@@ -1744,27 +1725,53 @@ function autoSchedule(){
     const wdCounts = [0,0,0,0]; // 全待機回数
     Object.values(newSch).forEach(di=>{ if(di!=null) wdCounts[di]++; });
 
+    // 曜日別担当回数カウント（月〜金、0=日〜6=土）
+    const dayOfWeekCounts = Array.from({length:4},()=>({1:0,2:0,3:0,4:0,5:0}));
+    for(let d=1;d<=days;d++){
+      const di=newSch[d];
+      const wd2=dow(y,m,d);
+      if(di!=null && wd2>=1 && wd2<=5) dayOfWeekCounts[di][wd2]++;
+    }
+
     for(let d = 1; d <= days; d++){
       if(newSch[d] !== undefined) continue;
       const wd2 = dow(y,m,d);
       const cands = [];
       for(let i = 0; i < 4; i++){
-        if((S.unavailable[i]||[]).includes(d)) continue;       // 不都合日
-        if((S.doctors[i].clinic||[]).includes(wd2)) continue;  // 外来日
-        if(S.duties.find(dt=>dt.day===d-1&&dt.docIdx===i)) continue; // 当直翌日
-        if(icuExclude[d]===i) continue;                        // ② ICU当直日は自分が待機不可
+        if((S.unavailable[i]||[]).includes(d)) continue;       // 不都合日（ハード）
+        if(S.duties.find(dt=>dt.day===d-1&&dt.docIdx===i)) continue; // 当直翌日（ハード）
+        if(icuExclude[d]===i) continue;                        // ICU当直日（ハード）
         let consec=0, prev=d-1;
         while(newSch[prev]===i){ consec++; prev--; }
-        if(consec>=S.maxConsec) continue;
+        if(consec>=S.maxConsec) continue;                      // 連続超過（ハード）
+
+        // ソフトペナルティ計算
+        let score = wdCounts[i] * 10 + consec * 20;
+
+        // 外来曜日ペナルティ（ハード除外→ソフト化）
+        if((S.doctors[i].clinic||[]).includes(wd2)) score += 60;
+
+        // 曜日別均等化ペナルティ（月〜金）
+        if(wd2>=1 && wd2<=5){
+          const wdCountForDay = dayOfWeekCounts[i][wd2]||0;
+          score += wdCountForDay * 15;
+        }
+
+        // 休前日ペナルティ
         let preHolPenalty = 0;
         if(d+1<=days && isOff(y,m,d+1)) preHolPenalty = 50;
         if(d+1<=days && isOff(y,m,d+1) && d+2<=days && isOff(y,m,d+2)) preHolPenalty = 90;
-        cands.push({i, score: wdCounts[i]*10 + consec*20 + preHolPenalty + Math.random()*3});
+        score += preHolPenalty;
+
+        score += Math.random() * 3;
+        cands.push({i, score});
       }
       if(!cands.length) continue;
       cands.sort((a,b)=>a.score-b.score);
-      newSch[d]=cands[0].i;
-      wdCounts[cands[0].i]++;
+      const picked = cands[0].i;
+      newSch[d] = picked;
+      wdCounts[picked]++;
+      if(wd2>=1 && wd2<=5) dayOfWeekCounts[picked][wd2]++;
     }
 
     // この試行のスコアを評価
@@ -1897,7 +1904,7 @@ function checkViolations(){
     if((S.unavailable[di]||[]).includes(d))
       viols.push({t:'err',msg:`${m}/${d} ${S.doctors[di].name}：不都合日`});
     if((S.doctors[di].clinic||[]).includes(wd))
-      viols.push({t:'err',msg:`${m}/${d} ${S.doctors[di].name}：外来日`});
+      viols.push({t:'warn',msg:`${m}/${d} ${S.doctors[di].name}：外来日（やむを得ず配置）`});
     const dutyPrev=S.duties.find(dt=>dt.day===d-1&&dt.docIdx===di);
     if(dutyPrev)
       viols.push({t:'err',msg:`${m}/${d} ${S.doctors[di].name}：${dutyPrev.type}翌日`});
