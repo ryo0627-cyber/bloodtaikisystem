@@ -1684,23 +1684,46 @@ function autoSchedule(){
           freeDays.forEach(d => { newSch[d] = pick; offCounts[pick]++; });
         }
       } else {
-        // 3日以上の連休 → できれば分散（ハッピーマンデー型）
-        for(const d of freeDays){
-          const wd2 = dow(y,m,d);
+        // 3日以上の大型連休 → 2〜3日の連続ブロックに分けて割り当て
+        // 例：5連休 → [2日ブロック][3日ブロック] で2人に分配
+        // 飛び石を避け、各医師に連続した休みを確保する
+
+        // まず未固定の日を連続ブロックに分割（2〜3日単位）
+        const blocks = [];
+        let i = 0;
+        while(i < freeDays.length){
+          // 3日残っていたら3日ブロック、それ以外は2日or1日
+          const blockSize = (freeDays.length - i >= 3) ? 3 : (freeDays.length - i >= 2) ? 2 : 1;
+          blocks.push(freeDays.slice(i, i + blockSize));
+          i += blockSize;
+        }
+
+        // 各ブロックを1人の医師に割り当て（飛び石なし）
+        for(const block of blocks){
           const cands2 = [];
-          for(let i = 0; i < 4; i++){
-            if((S.unavailable[i]||[]).includes(d)) continue;
-            if((S.doctors[i].clinic||[]).includes(wd2)) continue;
-            if(S.duties.find(dt=>dt.day===d-1&&dt.docIdx===i)) continue;
-            if(newSch[d-1] === i) continue;
-            cands2.push(i);
+          for(let di = 0; di < 4; di++){
+            let ok = true;
+            for(const d of block){
+              const wd2 = dow(y,m,d);
+              if((S.unavailable[di]||[]).includes(d)){ ok=false; break; }
+              if((S.doctors[di].clinic||[]).includes(wd2)){ ok=false; break; }
+              if(S.duties.find(dt=>dt.day===d-1&&dt.docIdx===di)){ ok=false; break; }
+            }
+            // 直前のブロックと同じ医師は避ける（連続しすぎ防止）
+            if(ok && newSch[block[0]-1] === di) ok = false;
+            if(ok) cands2.push(di);
           }
+          // 候補なしなら制約を緩和（連続チェックのみ外す）
           if(!cands2.length){
-            for(let i = 0; i < 4; i++){
-              if((S.unavailable[i]||[]).includes(d)) continue;
-              if((S.doctors[i].clinic||[]).includes(wd2)) continue;
-              if(S.duties.find(dt=>dt.day===d-1&&dt.docIdx===i)) continue;
-              cands2.push(i);
+            for(let di = 0; di < 4; di++){
+              let ok = true;
+              for(const d of block){
+                const wd2 = dow(y,m,d);
+                if((S.unavailable[di]||[]).includes(d)){ ok=false; break; }
+                if((S.doctors[di].clinic||[]).includes(wd2)){ ok=false; break; }
+                if(S.duties.find(dt=>dt.day===d-1&&dt.docIdx===di)){ ok=false; break; }
+              }
+              if(ok) cands2.push(di);
             }
           }
           if(cands2.length){
@@ -1710,7 +1733,8 @@ function autoSchedule(){
               const diff = scoreA - scoreB;
               return diff!==0?diff:Math.random()-.5;
             });
-            newSch[d]=cands2[0]; offCounts[cands2[0]]++;
+            const pick = cands2[0];
+            block.forEach(d => { newSch[d] = pick; offCounts[pick]++; });
           }
         }
       }
