@@ -196,13 +196,86 @@ html,body{height:100%;font-family:'Noto Sans JP',sans-serif;background:var(--bg)
 
 /* ── Print ── */
 @media print{
-  .topbar,.nav,.no-print{display:none!important;}
-  .body{grid-template-columns:1fr;}
-  .panel{display:flex!important;overflow:visible;}
-  .cal-cell{break-inside:avoid;}
-  body{background:#fff;color:#000;}
-  .cal-cell{border:1px solid #ccc;background:#fff!important;}
-  .oncall-sel{border:none;background:transparent;font-weight:600;}
+  /* 非表示要素 */
+  .topbar,.nav,.no-print,
+  .viol-panel,#violPanel,
+  .chat-wrap,#chatMessages,
+  .chat-input-row,.chat-examples{display:none!important;}
+
+  /* ページ設定 */
+  @page{ size:A4 landscape; margin:12mm; }
+  body{ background:#fff!important; color:#000!important; font-size:10px; }
+  .app{ display:block; }
+  .body{ display:block; }
+
+  /* 待機表パネルのみ表示 */
+  .panel{ display:none!important; }
+  #p-schedule{ display:block!important; }
+
+  /* カレンダーグリッド：2カラム→1カラム */
+  #p-schedule > div[style*="grid"]{
+    display:block!important;
+  }
+
+  /* カレンダーカード */
+  .card{ border:none!important; box-shadow:none!important; padding:0!important; }
+  .card-title{ font-size:13px!important; font-weight:700; margin-bottom:6px; border-bottom:2px solid #000; padding-bottom:4px; }
+
+  /* カレンダーグリッド */
+  .cal-grid{
+    display:grid!important;
+    grid-template-columns:repeat(7,1fr)!important;
+    gap:2px!important;
+  }
+  .cal-hdr{
+    background:#333!important;
+    color:#fff!important;
+    text-align:center;
+    font-size:9px;
+    padding:3px;
+    -webkit-print-color-adjust:exact;
+    print-color-adjust:exact;
+  }
+  .cal-cell{
+    border:1px solid #ccc!important;
+    background:#fff!important;
+    padding:3px!important;
+    break-inside:avoid;
+    min-height:52px;
+  }
+  .cal-cell.weekend{
+    background:#fef9f0!important;
+    -webkit-print-color-adjust:exact;
+    print-color-adjust:exact;
+  }
+  .c-date{ font-size:9px; color:#555; }
+  .duty-chip{ font-size:8px!important; padding:1px 2px!important; }
+  .oncall-sel{
+    border:none!important;
+    background:transparent!important;
+    font-weight:700!important;
+    font-size:11px!important;
+    color:#000!important;
+    padding:0!important;
+    width:100%!important;
+    appearance:none!important;
+    -webkit-appearance:none!important;
+  }
+  .unavail-hint{ font-size:7px!important; color:#999!important; }
+  .note-badge{ display:none!important; }
+
+  /* 統計行 */
+  .stats-row{
+    display:flex!important;
+    gap:8px;
+    margin-bottom:6px;
+    font-size:10px;
+  }
+  .stat-card{
+    border:1px solid #ccc!important;
+    background:#fff!important;
+    padding:4px 8px!important;
+  }
 }
 </style>
 </head>
@@ -318,8 +391,10 @@ html,body{height:100%;font-family:'Noto Sans JP',sans-serif;background:var(--bg)
     <div id="remindStatus"></div>
     <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
       <button class="btn btn-yellow" onclick="sendReminders()">🔔 未回答者にリマインド送信</button>
+      <button class="btn btn-primary" onclick="loadResponsesFromStorage()">📥 不都合日を取り込む</button>
       <button class="btn btn-green" onclick="goPanel('p-schedule')">✓ 全員回答済み → 待機表作成</button>
     </div>
+    <div style="font-size:10px;color:var(--text2);margin-top:6px;">※「不都合日を取り込む」は各医師が同じブラウザで入力した場合に機能します。別デバイスの場合はJSON読込を使用してください。</div>
   </div>
 
   <!-- Special notes from doctors -->
@@ -342,8 +417,18 @@ html,body{height:100%;font-family:'Noto Sans JP',sans-serif;background:var(--bg)
     <button class="btn btn-primary" onclick="autoSchedule()">⚡ 自動配置</button>
     <button class="btn btn-ghost" onclick="undoSchedule()" id="undoBtn" disabled title="元に戻す">↩ Undo</button>
     <button class="btn btn-ghost" onclick="clearSchedule()">🗑 クリア</button>
+    <button class="btn" style="background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.3);color:var(--green);" onclick="finalizeMonth()" title="今月の土日祝担当を履歴に保存し翌月配置に反映">✅ 今月を確定・保存</button>
     <div style="flex:1;"></div>
     <div class="stats-row" id="statsRow"></div>
+  </div>
+
+  <!-- 3ヶ月累積履歴パネル -->
+  <div class="card no-print" style="padding:10px 14px;" id="historyCard">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+      <span style="font-size:11px;font-weight:700;color:var(--text2);">📊 直近3ヶ月 土日祝担当履歴</span>
+      <span style="font-size:10px;color:var(--text3);">（自動配置のスコアに反映されます）</span>
+    </div>
+    <div id="historyPanel"></div>
   </div>
 
   <div id="violPanel" style="display:none;">
@@ -412,6 +497,17 @@ html,body{height:100%;font-family:'Noto Sans JP',sans-serif;background:var(--bg)
       </label>
     </div>
   </div>
+
+  <!-- 3ヶ月累積公平化 -->
+  <div class="card">
+    <div class="card-title"><span>📊 3ヶ月累積公平化</span></div>
+    <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">今月の待機表が確定したら「今月を履歴に保存」を押してください。翌月の自動配置に反映されます（最大3ヶ月分）。</div>
+    <button class="btn btn-primary" onclick="saveMonthToHistory()" style="margin-bottom:12px;">
+      💾 今月を履歴に保存
+    </button>
+    <div id="historyPanel"></div>
+  </div>
+
   <div class="card">
     <div class="card-title"><span>Claude API Key</span></div>
     <div style="font-size:11px;color:var(--text2);margin-bottom:8px;">当直表PDFのAI解析に使用します。ブラウザ内のみで処理され、外部送信されません。</div>
@@ -461,7 +557,7 @@ let S = {
   year: 2025, month: 3,
   doctors: [
     {name:'小沼', email:'', clinic:[], token: rand()},
-    {name:'幸髙', email:'', clinic:[], token: rand()},
+    {name:'菱沼', email:'', clinic:[], token: rand()},
     {name:'酒井', email:'', clinic:[], token: rand()},
     {name:'田中', email:'', clinic:[], token: rand()},
   ],
@@ -472,6 +568,8 @@ let S = {
   dutiesConfirmed: false,
   maxConsec: 2,
   fairnessTol: 2,
+  // 過去3ヶ月の累積カウント {docIdx: {total, offCount}} の配列（最大3件）
+  monthHistory: [], // [{year,month,counts:[{total,offCount}×4]}]
 };
 let currentModalDoc = null;
 
@@ -499,7 +597,7 @@ function goPanel(id){
   const map={  'p-duty':'nb-duty','p-doctors':'nb-doctors',
     'p-collect':'nb-collect','p-schedule':'nb-schedule','p-settings':'nb-settings'};
   document.getElementById(map[id])?.classList.add('active');
-  if(id==='p-schedule') renderCalendar();
+  if(id==='p-schedule'){ renderCalendar(); renderHistoryPanel(); }
   if(id==='p-collect') renderCollect();
   updateSteps();
 }
@@ -528,6 +626,7 @@ function init(){
   renderDutyTable();
   renderSteps();
   updateSteps();
+  renderHistoryPanel();
 
   // Drag & drop upload
   const zone=document.getElementById('uploadZone');
@@ -959,6 +1058,39 @@ function markResponded(di){
   updateSteps();
 }
 
+// ① 不都合日をlocalStorageから自動取り込み
+function loadResponsesFromStorage(){
+  let loaded=0;
+  S.doctors.forEach((d,i)=>{
+    const key=`oncall_response_${i}`;
+    try{
+      const data=JSON.parse(localStorage.getItem(key)||'null');
+      if(!data) return;
+      // 対象月の不都合日を取り込み
+      const {year:y, month:m}=S;
+      const days=data.unavail
+        .filter(x=>x.year===y && x.month===m)
+        .map(x=>x.day);
+      if(days.length>0){
+        S.unavailable[i]=days;
+        S.responded[i]=true;
+        loaded++;
+      }
+      // 特記事項も取り込み
+      if(data.specialNote){
+        if(!S.specialNotes) S.specialNotes={};
+        S.specialNotes[i]=data.specialNote;
+      }
+    }catch(e){}
+  });
+  renderCollect();
+  renderDocCards();
+  renderCalendar();
+  updateSteps();
+  if(loaded>0) toast(`${loaded}名分の不都合日を取り込みました ✓`,'ok');
+  else toast('localStorageに回答データが見つかりません（同一ブラウザで入力した場合のみ取り込めます）','info');
+}
+
 function regenerateTokens(){
   S.doctors.forEach(d=>d.token=rand());
   Object.keys(S.responded).forEach(k=>S.responded[k]=false);
@@ -1334,15 +1466,94 @@ function countFullWeekends(sch, y, m){
 }
 
 // ══════════════════════════════════════════════════════════
+// 累積履歴管理（3ヶ月公平化）
+// ══════════════════════════════════════════════════════════
+
+// 現在月の結果を履歴に保存（月確定時に呼ぶ）
+function saveMonthToHistory(){
+  const {year:y, month:m} = S;
+  const days = daysInMonth(y, m);
+  const counts = [0,0,0,0];
+  const offCounts = [0,0,0,0];
+  for(let d=1;d<=days;d++){
+    const di = S.schedule[d];
+    if(di!=null){
+      counts[di]++;
+      if(isOff(y,m,d)) offCounts[di]++;
+    }
+  }
+  // 同月が既にあれば上書き
+  S.monthHistory = S.monthHistory.filter(h=>!(h.year===y&&h.month===m));
+  S.monthHistory.push({year:y, month:m, counts, offCounts});
+  // 3ヶ月分だけ保持（古い順に削除）
+  S.monthHistory.sort((a,b)=>a.year!==b.year?a.year-b.year:a.month-b.month);
+  if(S.monthHistory.length>3) S.monthHistory=S.monthHistory.slice(-3);
+  renderHistoryPanel();
+  toast(`${y}年${m}月の実績を履歴に保存しました（3ヶ月累積公平化に使用）`,'ok');
+}
+
+// 過去3ヶ月の累積土日祝カウントを取得
+function getHistoryOffCounts(){
+  const totals = [0,0,0,0];
+  const {year:y, month:m} = S;
+  S.monthHistory.forEach(h=>{
+    if(h.year===y && h.month===m) return;
+    h.offCounts.forEach((c,i)=>{ totals[i]+=c; });
+  });
+  return totals;
+}
+
+function renderHistoryPanel(){
+  const el=document.getElementById('historyPanel');
+  if(!el) return;
+  if(!S.monthHistory.length){
+    el.innerHTML='<div style="color:var(--text2);font-size:11px;">履歴なし（まだ保存されていません）</div>';
+    return;
+  }
+  const histOff=getHistoryOffCounts();
+  let html='<div style="font-size:11px;color:var(--text2);margin-bottom:6px;">保存済み履歴：</div>';
+  html+=S.monthHistory.map(h=>`
+    <div style="background:var(--s3);border:1px solid var(--border);border-radius:6px;padding:7px 10px;margin-bottom:4px;font-size:11px;">
+      <span style="font-weight:700;">${h.year}年${h.month}月</span>
+      　${S.doctors.map((d,i)=>`<span style="color:${DOC_COLORS[i]}">${d.name}:土日祝${h.offCounts[i]}回</span>`).join(' / ')}
+      <button onclick="removeHistory(${h.year},${h.month})" style="float:right;background:none;border:none;color:var(--red);cursor:pointer;font-size:10px;">削除</button>
+    </div>
+  `).join('');
+  html+=`<div style="margin-top:8px;padding:7px 10px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:6px;font-size:11px;">
+    <div style="font-weight:700;margin-bottom:4px;">累積土日祝（翌月配置に反映）:</div>
+    ${S.doctors.map((d,i)=>`<span style="color:${DOC_COLORS[i]};margin-right:10px;">${d.name}: ${histOff[i]}回</span>`).join('')}
+  </div>`;
+  el.innerHTML=html;
+}
+
+function removeHistory(y,m){
+  S.monthHistory=S.monthHistory.filter(h=>!(h.year===y&&h.month===m));
+  renderHistoryPanel();
+  toast(`${y}年${m}月の履歴を削除しました`,'info');
+}
+
+// ══════════════════════════════════════════════════════════
 // メインスケジューラ
 // ══════════════════════════════════════════════════════════
 function autoSchedule(){
   const {year:y, month:m} = S;
   const days = daysInMonth(y, m);
 
-  // 当直日は固定
+  // 当直日は固定（一般・センター当直）
+  // ② ICU当直日は当直者自身も待機不可（fixedSchに入れない）
   const fixedSch = {};
-  S.duties.forEach(dt => { fixedSch[dt.day] = dt.docIdx; });
+  const icuExclude = {}; // {day: docIdx} ICU当直日は待機除外
+  S.duties.forEach(dt => {
+    if(dt.type === 'ICU当直'){
+      icuExclude[dt.day] = dt.docIdx; // 待機不可としてマーク
+    } else {
+      fixedSch[dt.day] = dt.docIdx;   // 通常通り待機固定
+    }
+  });
+
+  // 過去3ヶ月の累積土日祝カウント（公平化ペナルティ用）
+  const historyOffCounts = getHistoryOffCounts();
+  const hasHistory = historyOffCounts.some(c=>c>0);
 
   // 連休クラスタを取得・価値付け（長い連休ほど高価値）
   const clusters = getHolidayClusters(y, m);
@@ -1388,9 +1599,11 @@ function autoSchedule(){
           if(ok) cands.push(i);
         }
         if(cands.length){
-          // 土日担当回数が少ない医師を優先、同点はランダム
+          // 土日担当回数（今月+累積履歴）が少ない医師を優先
           cands.sort((a,b) => {
-            const diff = offCounts[a] - offCounts[b];
+            const scoreA = offCounts[a] * 3 + (hasHistory ? historyOffCounts[a] : 0);
+            const scoreB = offCounts[b] * 3 + (hasHistory ? historyOffCounts[b] : 0);
+            const diff = scoreA - scoreB;
             return diff !== 0 ? diff : Math.random() - 0.5;
           });
           const pick = cands[0];
@@ -1398,7 +1611,6 @@ function autoSchedule(){
         }
       } else {
         // 3日以上の連休 → できれば分散（ハッピーマンデー型）
-        // 各日を個別に割り当てるが、連続にならないよう制御
         for(const d of freeDays){
           const wd2 = dow(y,m,d);
           const cands2 = [];
@@ -1406,12 +1618,10 @@ function autoSchedule(){
             if((S.unavailable[i]||[]).includes(d)) continue;
             if((S.doctors[i].clinic||[]).includes(wd2)) continue;
             if(S.duties.find(dt=>dt.day===d-1&&dt.docIdx===i)) continue;
-            // 前日が同じ医師の場合は避ける（連続防止）
             if(newSch[d-1] === i) continue;
             cands2.push(i);
           }
           if(!cands2.length){
-            // 緩和：連続でも許可
             for(let i = 0; i < 4; i++){
               if((S.unavailable[i]||[]).includes(d)) continue;
               if((S.doctors[i].clinic||[]).includes(wd2)) continue;
@@ -1421,7 +1631,9 @@ function autoSchedule(){
           }
           if(cands2.length){
             cands2.sort((a,b)=>{
-              const diff = offCounts[a]-offCounts[b];
+              const scoreA = offCounts[a] * 3 + (hasHistory ? historyOffCounts[a] : 0);
+              const scoreB = offCounts[b] * 3 + (hasHistory ? historyOffCounts[b] : 0);
+              const diff = scoreA - scoreB;
               return diff!==0?diff:Math.random()-.5;
             });
             newSch[d]=cands2[0]; offCounts[cands2[0]]++;
@@ -1439,13 +1651,13 @@ function autoSchedule(){
       const wd2 = dow(y,m,d);
       const cands = [];
       for(let i = 0; i < 4; i++){
-        if((S.unavailable[i]||[]).includes(d)) continue;
-        if((S.doctors[i].clinic||[]).includes(wd2)) continue;
-        if(S.duties.find(dt=>dt.day===d-1&&dt.docIdx===i)) continue;
+        if((S.unavailable[i]||[]).includes(d)) continue;       // 不都合日
+        if((S.doctors[i].clinic||[]).includes(wd2)) continue;  // 外来日
+        if(S.duties.find(dt=>dt.day===d-1&&dt.docIdx===i)) continue; // 当直翌日
+        if(icuExclude[d]===i) continue;                        // ② ICU当直日は自分が待機不可
         let consec=0, prev=d-1;
         while(newSch[prev]===i){ consec++; prev--; }
         if(consec>=S.maxConsec) continue;
-        // 翌日が土日祝の場合、その医師を避ける（休前日保護）
         let preHolPenalty = 0;
         if(d+1<=days && isOff(y,m,d+1)) preHolPenalty = 50;
         if(d+1<=days && isOff(y,m,d+1) && d+2<=days && isOff(y,m,d+2)) preHolPenalty = 90;
@@ -1463,8 +1675,16 @@ function autoSchedule(){
     const totalOff = [0,0,0,0];
     for(let d=1;d<=days;d++) if(isOff(y,m,d) && newSch[d]!=null) totalOff[newSch[d]]++;
     const offMax = Math.max(...totalOff), offMin = Math.min(...totalOff.filter(c=>c>0));
-    // スコア：最小完全休み週末数を最大化 + 土日公平性を最大化
-    const trialScore = minFW * 100 - (offMax - offMin) * 10;
+
+    // 3ヶ月累積補正：直近3ヶ月の土日祝累積回数が多い医師はペナルティ
+    const hist = getRecentHistory(3);
+    const histPenalty = hist.reduce((sum,i)=>{
+      const maxH=Math.max(...hist), minH=Math.min(...hist);
+      return sum + (hist[i]-minH)*5;
+    }, 0);
+
+    // スコア：最小完全休み週末数を最大化 + 土日公平性 + 累積補正
+    const trialScore = minFW * 100 - (offMax - offMin) * 10 - histPenalty;
     if(trialScore > bestScore){
       bestScore = trialScore;
       bestSch = {...newSch};
@@ -1477,7 +1697,92 @@ function autoSchedule(){
   // 結果サマリ
   const fw = countFullWeekends(S.schedule, y, m);
   const minFW = Math.min(...fw);
-  toast(`自動配置完了 ✓ 完全OFF土日: 最小${minFW}回/人 (${fw.map((n,i)=>S.doctors[i].name+n+'回').join(' / ')})`);
+  const hist = getRecentHistory(3);
+  const histInfo = S.doctors.map((d,i)=>`${d.name}累積${hist[i]}回`).join(' / ');
+  toast(`自動配置完了 ✓ 完全OFF土日: 最小${minFW}回/人 | 直近3ヶ月累積: ${histInfo}`);
+}
+
+// ══════════════════════════════════════════════════════════
+// 3ヶ月累積履歴管理
+// ══════════════════════════════════════════════════════════
+
+// 直近N ヶ月の土日祝担当累積回数を返す [doc0, doc1, doc2, doc3]
+function getRecentHistory(months){
+  const result = [0,0,0,0];
+  const {year:cy, month:cm} = S;
+  for(let i=1; i<=months; i++){
+    let y=cy, m=cm-i;
+    if(m<=0){ m+=12; y--; }
+    const key=`oncall_history_${y}_${m}`;
+    try{
+      const data=JSON.parse(localStorage.getItem(key)||'null');
+      if(data) data.forEach((v,idx)=>{ result[idx]+=v||0; });
+    }catch(e){}
+  }
+  return result;
+}
+
+// 今月の待機表を確定して履歴に保存
+function finalizeMonth(){
+  const {year:y, month:m}=S;
+  const days=daysInMonth(y,m);
+  const offCounts=[0,0,0,0];
+  for(let d=1;d<=days;d++){
+    const di=S.schedule[d];
+    if(di!=null && isOff(y,m,d)) offCounts[di]++;
+  }
+  const key=`oncall_history_${y}_${m}`;
+  localStorage.setItem(key, JSON.stringify(offCounts));
+
+  // 統計表示
+  const summary=S.doctors.map((d,i)=>`${d.name}: 土日祝${offCounts[i]}回`).join('\n');
+  toast(`${y}年${m}月を確定しました。翌月配置に反映されます`,'ok');
+
+  // 累積表示更新
+  renderHistoryPanel();
+}
+
+// 履歴パネルを描画
+function renderHistoryPanel(){
+  const el=document.getElementById('historyPanel');
+  if(!el) return;
+  const {year:cy,month:cm}=S;
+  let html='<div style="font-size:11px;">';
+
+  // 直近3ヶ月の内訳
+  for(let i=3;i>=1;i--){
+    let y=cy, m=cm-i;
+    if(m<=0){m+=12;y--;}
+    const key=`oncall_history_${y}_${m}`;
+    try{
+      const data=JSON.parse(localStorage.getItem(key)||'null');
+      html+=`<div style="margin-bottom:6px;"><div style="color:var(--text2);margin-bottom:2px;">${y}年${m}月</div>`;
+      if(data){
+        html+=S.doctors.map((d,idx)=>`
+          <span style="display:inline-flex;align-items:center;gap:3px;margin-right:8px;">
+            <span style="width:8px;height:8px;border-radius:50%;background:${DOC_COLORS[idx]};display:inline-block;"></span>
+            ${d.name}: <b>${data[idx]||0}回</b>
+          </span>`).join('');
+      } else {
+        html+='<span style="color:var(--text3);">未確定</span>';
+      }
+      html+='</div>';
+    }catch(e){}
+  }
+
+  // 累積合計
+  const total=getRecentHistory(3);
+  const maxT=Math.max(...total), minT=Math.min(...total);
+  html+=`<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
+    <div style="color:var(--text2);margin-bottom:4px;">直近3ヶ月累積</div>
+    ${S.doctors.map((d,i)=>`
+      <span style="display:inline-flex;align-items:center;gap:3px;margin-right:8px;">
+        <span style="width:8px;height:8px;border-radius:50%;background:${DOC_COLORS[i]};display:inline-block;"></span>
+        ${d.name}: <b style="color:${total[i]===maxT&&maxT!==minT?'var(--red)':total[i]===minT&&maxT!==minT?'var(--green)':'var(--text)'}">${total[i]}回</b>
+      </span>`).join('')}
+  </div>`;
+  html+='</div>';
+  el.innerHTML=html;
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1498,6 +1803,10 @@ function checkViolations(){
     const dutyPrev=S.duties.find(dt=>dt.day===d-1&&dt.docIdx===di);
     if(dutyPrev)
       viols.push({t:'err',msg:`${m}/${d} ${S.doctors[di].name}：${dutyPrev.type}翌日`});
+    // ② ICU当直日は自分が待機不可
+    const icuDuty=S.duties.find(dt=>dt.day===d&&dt.docIdx===di&&dt.type==='ICU当直');
+    if(icuDuty)
+      viols.push({t:'err',msg:`${m}/${d} ${S.doctors[di].name}：ICU当直日に待機配置`});
     let consec=1, prev=d-1;
     while(S.schedule[prev]===di){ consec++; prev--; }
     if(consec>S.maxConsec)
